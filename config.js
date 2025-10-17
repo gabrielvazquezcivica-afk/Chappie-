@@ -1,7 +1,7 @@
 module.exports = {
   ownerNumber: '523310167470', // Número del dueño con código de país
-  prefix: '!', // Prefijo para los comandos
-  sessionName: 'whatsapp-session', // Nombre del archivo de sesión
+  prefix: '.', // Prefijo para los comandos
+  sessionName: 'Itachi 🚀', // Nombre del archivo de sesión
   messages: {
     success: '✅ Éxito!',
     admin: 'Este comando es solo para administradores!',
