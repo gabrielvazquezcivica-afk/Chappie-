@@ -10,7 +10,7 @@
     "@adiwajshing/baileys": "^5.0.0",
     "qrcode": "^1.5.1",
     "qrcode-terminal": "^0.12.0"
-  }
+  },
 }
   "status": true,
   "creador": "Neveloopp",
@@ -23,7 +23,7 @@
     "source": "https://open.spotify.com/track/41a2UXus84nUMVDn27074E"
   }
 }
-  "estado": verdadero,
+  "estado": "verdadero",
   "creador": "Neveloopp",
   "resultado": {
     "title": "TRAVA NO OLHAR.m4a",
@@ -32,7 +32,7 @@
   }
 } 
 {
-  "estado": verdadero,
+  "estado": "verdadero",
   "creador": "Neveloopp",
   "resultado": {
     "title": "TRAVA NO OLHAR.mp4",
