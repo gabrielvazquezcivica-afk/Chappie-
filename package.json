@@ -11,31 +11,3 @@
     "qrcode": "^1.5.1",
     "qrcode-terminal": "^0.12.0"
   },
-}
-  "status": true,
-  "creador": "Neveloopp",
-  "result": {
-    "title": "VAI CAIR",
-    "artist": "DJ Asul",
-    "duration": 0,
-    "image": "https://i.scdn.co/image/ab67616d0000b2731dc2093c25a5986c0d68c56e",
-    "url_download": "https://api-nv.ultraplus.click/api/t/ogtehoxx",
-    "source": "https://open.spotify.com/track/41a2UXus84nUMVDn27074E"
-  },
-{
-  "estado": "verdadero",
-  "creador": "Neveloopp",
-  "resultado": {
-    "title": "TRAVA NO OLHAR.m4a",
-    "dl": "https://api-nv.ultraplus.click/api/t/97apfh2w",
-    "caducar": 1
-  },
-{
-  "estado": "verdadero",
-  "creador": "Neveloopp",
-  "resultado": {
-    "title": "TRAVA NO OLHAR.mp4",
-    "dl": "https://api-nv.ultraplus.click/api/t/m2avmj9e",
-    "caducar": 1
-  }
-}
