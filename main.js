@@ -1,43 +1,29 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys')
-const { Boom } = require('@hapi/boom')
+const { Client, LocalAuth } = require('whatsapp-web.js');
+const qrcode = require('qrcode-terminal');
 
-async function startBot() {
-    // Autenticación basada en archivos
-    const { state, saveCreds } = await useMultiFileAuthState('auth_info')
-    const sock = makeWASocket({
-        auth: state,
-        printQRInTerminal: true
-    })
+// Inicializamos el cliente de WhatsApp con guardado local de sesión.
+const client = new Client({
+    authStrategy: new LocalAuth(),
+    puppeteer: { headless: true }
+});
 
-    // Evento: Mensaje entrante
-    sock.ev.on('messages.upsert', async ({ messages, type }) => {
-        if (type !== 'notify') return
-        const msg = messages[0]
-        if (!msg.message || msg.key.fromMe) return
+// Evento para mostrar el QR en la terminal.
+client.on('qr', (qr) => {
+    console.log('Escanea este código QR con tu WhatsApp:');
+    qrcode.generate(qr, { small: true });
+});
 
-        const from = msg.key.remoteJid
-        const text = msg.message.conversation || msg.message.extendedTextMessage?.text
+// Evento para mostrar que el cliente está listo.
+client.on('ready', () => {
+    console.log('¡El bot está listo y conectado a WhatsApp!');
+});
 
-        // Responde al mensaje recibido
-        if (text) {
-            await sock.sendMessage(from, { text: '¡Hola! Recibí tu mensaje: ' + text })
-        }
-    })
+// Evento para recibir mensajes.
+client.on('message', message => {
+    if (message.body === '!ping') {
+        message.reply('¡Pong!');
+    }
+});
 
-    // Evento: Guardar credenciales cuando cambian
-    sock.ev.on('creds.update', saveCreds)
-
-    // Evento: Reconexión automática
-    sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect } = update
-        if (connection === 'close') {
-            if ((lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut) {
-                startBot()
-            } else {
-                console.log('Se cerró la sesión. Por favor, elimine la carpeta auth_info y vuelva a iniciar.')
-            }
-        }
-    })
-}
-
-startBot()
+// Iniciamos el cliente.
+client.initialize();
