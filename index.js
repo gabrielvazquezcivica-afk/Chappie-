@@ -1,18 +1,35 @@
-const { default: makeWASocket, DisconnectReason, useSingleFileAuthState, fetchLatestBaileysVersion } = require('@adiwajshing/baileys');
+// Compatibilidad con distintas exportaciones de @adiwajshing/baileys
+const baileys = require('@adiwajshing/baileys');
 const qrcodeTerminal = require('qrcode-terminal');
 const qrcode = require('qrcode');
 const fs = require('fs');
-const path = require('path');
+
+const makeWASocket = (baileys.default && baileys.default.makeWASocket) || baileys.makeWASocket || baileys.default || baileys;
+const DisconnectReason = (baileys.DisconnectReason) || (baileys.default && baileys.default.DisconnectReason);
+const useSingleFileAuthState = (baileys.useSingleFileAuthState) || (baileys.default && baileys.default.useSingleFileAuthState);
+const fetchLatestBaileysVersion = (baileys.fetchLatestBaileysVersion) || (baileys.default && baileys.default.fetchLatestBaileysVersion);
+
+if (typeof useSingleFileAuthState !== 'function' || typeof makeWASocket === 'undefined') {
+  console.error('La versión de @adiwajshing/baileys instalada no proporciona useSingleFileAuthState o makeWASocket en el formato esperado.');
+  console.error('Recomiendo instalar @adiwajshing/baileys@^5.0.0 con: npm install @adiwajshing/baileys@^5.0.0 --save');
+  process.exit(1);
+}
 
 const AUTH_FILE = './auth_info.json';
 const QR_IMAGE = './qr.png';
 
 async function start() {
-  // carga/crea archivo de sesión
+  // Crea o carga archivo de sesión
   const { state, saveState } = useSingleFileAuthState(AUTH_FILE);
 
-  // obtener la versión recomendada de WhatsApp Web (opcional, pero recomendado)
-  const { version } = await fetchLatestBaileysVersion();
+  // Obtener versión recomendada (si falla, usamos undefined y Baileys usará su versión por defecto)
+  let version;
+  try {
+    const verRes = await fetchLatestBaileysVersion();
+    version = verRes?.version;
+  } catch (e) {
+    version = undefined;
+  }
 
   const sock = makeWASocket({
     auth: state,
@@ -20,20 +37,16 @@ async function start() {
     version
   });
 
-  // guardar credenciales cuando cambien
   sock.ev.on('creds.update', saveState);
 
-  // manejar conexión y QR
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
-      // mostrar QR en terminal
       qrcodeTerminal.generate(qr, { small: true });
       console.log('----- QR string (puedes copiarlo si no puedes escanear el terminal) -----');
       console.log(qr);
 
-      // guardar imagen del QR (qr.png)
       try {
         await qrcode.toFile(QR_IMAGE, qr);
         console.log(`QR guardado en ${QR_IMAGE}`);
@@ -43,8 +56,7 @@ async function start() {
     }
 
     if (connection === 'open') {
-      console.log('Conectado a WhatsApp ✅'); 
-      // Borra QR guardado si quieres
+      console.log('Conectado a WhatsApp ✅');
       try { if (fs.existsSync(QR_IMAGE)) fs.unlinkSync(QR_IMAGE); } catch (e) {}
     }
 
@@ -52,9 +64,8 @@ async function start() {
       const reason = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.message;
       console.log('Conexión cerrada:', reason);
 
-      // Reactivar reconexión automática en la mayoría de casos
       const statusCode = lastDisconnect?.error?.output?.statusCode;
-      if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
+      if (statusCode === DisconnectReason?.loggedOut || statusCode === 401) {
         console.log('La sesión fue cerrada (logged out). Elimina el archivo de sesión y vuelve a iniciar para obtener un nuevo QR.');
       } else {
         console.log('Reiniciando socket...');
@@ -63,7 +74,6 @@ async function start() {
     }
   });
 
-  // Ejemplo mínimo: responder "ping" con "pong"
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     if (type !== 'notify') return;
     const msg = messages[0];
@@ -79,7 +89,6 @@ async function start() {
     }
   });
 
-  // manejo de señales para cerrar ordenadamente
   process.on('SIGINT', async () => {
     console.log('Cerrando socket...');
     await sock.logout().catch(() => {});
@@ -90,4 +99,5 @@ async function start() {
 start().catch(err => {
   console.error('Error al iniciar el bot:', err);
   process.exit(1);
+});
 });
