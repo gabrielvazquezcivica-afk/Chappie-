@@ -10,4 +10,5 @@
     "@adiwajshing/baileys": "^5.0.0",
     "qrcode": "^1.5.1",
     "qrcode-terminal": "^0.12.0"
-  },
+  }
+}
