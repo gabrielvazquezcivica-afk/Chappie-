@@ -1,14 +1,19 @@
 {
-  "name": "GABO TRC",
-  "version": "5.0.0",
-  "description": "BOT DE WHATSAPP",
+  "name": "whatsapp-bot",
+  "version": "1.0.0",
+  "description": "Bot de WhatsApp utilizando Baileys",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
+  "keywords": [
+    "whatsapp",
+    "bot",
+    "baileys"
+  ],
+  "author": "TuNombre",
+  "license": "MIT",
   "dependencies": {
-    "@adiwajshing/baileys": "^5.0.0",
-    "qrcode": "^1.5.1",
-    "qrcode-terminal": "^0.12.0"
+    "@whiskeysockets/baileys": "^6.3.0"
   }
 }
