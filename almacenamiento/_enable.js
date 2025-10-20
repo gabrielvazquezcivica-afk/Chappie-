@@ -1,4 +1,4 @@
-const fs = require('fs');
+const fs = import('fs');
 const GROUP_SETTINGS_PATH = './groupSettings.json';
 
 // Carga o inicializa la configuración
