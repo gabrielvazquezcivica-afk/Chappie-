@@ -1,52 +1,44 @@
-/*
- * Comando: antilink 1 / antilink 0
- * Función: Activa o desactiva el sistema antilink en el grupo. El bot eliminará o advertirá a usuarios que envíen enlaces no permitidos.
- * Uso: Envía "antilink 1" para activar, "antilink 0" para desactivar el filtro de enlaces.
- */
+// Requiere Baileys v7+
+// Instala: npm install @whiskeysockets/baileys
+const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require("@whiskeysockets/baileys");
 
-let antilinkGroups = {};
+async function startBot() {
+  const { state, saveCreds } = await useMultiFileAuthState("auth_info");
+  const { version } = await fetchLatestBaileysVersion();
+  const sock = makeWASocket({ version, auth: state });
 
-async function onCommandAntilink(m, { groupMetadata, sendMessage }) {
-  if (!groupMetadata) return sendMessage(m.chat, 'Este comando solo funciona en grupos.');
+  sock.ev.on("messages.upsert", async ({ messages, type }) => {
+    if (type !== "notify") return;
+    for (const msg of messages) {
+      if (!msg.message || !msg.key.remoteJid) continue;
 
-  const groupId = m.chat;
-  const text = m.text || "";
+      let text = "";
+      // Extrae el texto del mensaje
+      if (msg.message.conversation) text = msg.message.conversation;
+      else if (msg.message.extendedTextMessage) text = msg.message.extendedTextMessage.text;
+      else continue;
 
-  if (text.includes("1")) {
-    antilinkGroups[groupId] = true;
-    await sendMessage(groupId, '✅ Antilink activado.\nLos mensajes con enlaces serán eliminados o advertidos.');
-  } else if (text.includes("0")) {
-    antilinkGroups[groupId] = false;
-    await sendMessage(groupId, '🚫 Antilink desactivado.\nYa se permiten enlaces en este grupo.');
-  } else {
-    await sendMessage(groupId, 'Uso: antilink 1 (activar) | antilink 0 (desactivar)');
-  }
-}
+      // Expresión regular para detectar links
+      const regexLink = /(https?:\/\/[^\s]+)|(www\.[^\s]+)|(\.com\b)|(\.net\b)|(\.org\b)/i;
+      if (regexLink.test(text)) {
+        try {
+          // Elimina el mensaje con link
+          await sock.sendMessage(msg.key.remoteJid, {
+            delete: msg.key
+          });
 
-// Handler para mensajes (debes integrarlo en tu sistema de escucha de mensajes)
-async function onMessage(m, { sendMessage }) {
-  const groupId = m.chat;
-  if (!antilinkGroups[groupId]) return;
-
-  // Regex para detectar enlaces
-  const linkRegex = /(https?:\/\/[^\s]+)|(chat\.whatsapp\.com\/[^\s]+)/i;
-
-  if (linkRegex.test(m.text) && !m.fromMe) {
-    try {
-      await sendMessage(groupId, `🚫 @${m.sender.split('@')[0]}, no se permiten enlaces en este grupo.`, {
-        mentions: [m.sender]
-      });
-      // Si tu framework lo permite:
-      // await deleteMessage(groupId, m.key);
-    } catch (e) {
-      sendMessage(groupId, 'No tengo permisos suficientes para eliminar mensajes.');
+          // Envía aviso
+          await sock.sendMessage(msg.key.remoteJid, {
+            text: `🚫 No se permiten enlaces en este grupo. Tu mensaje fue eliminado.`
+          }, { quoted: msg });
+        } catch (err) {
+          console.error("Error al borrar mensaje:", err);
+        }
+      }
     }
-  }
+  });
+
+  sock.ev.on("creds.update", saveCreds);
 }
 
-module.exports = {
-  command: ['antilink'],
-  groupOnly: true,
-  handler: onCommandAntilink,
-  onMessage
-};
+startBot();
