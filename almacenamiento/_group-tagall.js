@@ -1,34 +1,33 @@
-const countryFlags = {
-  "Mexico": "🇲🇽",
-  "Argentina": "🇦🇷",
-  "Colombia": "🇨🇴",
-  "Chile": "🇨🇱",
-  "Peru": "🇵🇪",
-  "España": "🇪🇸",
-  "EEUU": "🇺🇸",
-  // Agrega más países y banderas si lo deseas
-};
+/*
+ * Comando: .todos
+ * Función: Menciona a todos los participantes del grupo y añade una bandera de país aleatoria a cada mención.
+ * Uso: Envía ".todos" en el grupo para mencionar a todos con una bandera.
+ */
 
-async function tagAllWithFlags(sock, groupChatId, membersInfo) {
-  // membersInfo debe ser un array de objetos: { id: 'user@c.us', country: 'Mexico' }
-  let mentions = [];
-  let text = '';
+const countryFlags = [
+  "🇦🇷", "🇧🇷", "🇨🇱", "🇨🇴", "🇪🇨", "🇪🇸", "🇺🇸", "🇵🇪", "🇵🇾", "🇲🇽", "🇺🇾", "🇻🇪", "🇬🇹", "🇩🇴", "🇸🇻", "🇭🇳", "🇳🇮", "🇨🇷", "🇵🇦", "🇧🇴"
+];
 
-  for (const member of membersInfo) {
-    const flag = countryFlags[member.country] || '🏳️';
-    text += `${flag} @${member.id.split('@')[0]}\n`;
-    mentions.push(member.id);
-  }
+async function onCommandTodos(m, { groupMetadata, sendMessage }) {
+  if (!groupMetadata) return sendMessage(m.chat, 'Solo se puede usar en grupos.');
 
-  await sock.sendMessage(groupChatId, { text, mentions });
+  const mentions = groupMetadata.participants
+    .filter(p => !p.isAdmin && !p.isSuperAdmin) // opcional: excluir admins
+    .map((p, idx) => ({
+      jid: p.id,
+      flag: countryFlags[idx % countryFlags.length]
+    }));
+
+  const mentionText = mentions.map(m => `${m.flag} @${m.jid.split('@')[0]}`).join('\n');
+
+  await sendMessage(m.chat, mentionText, {
+    mentions: mentions.map(m => m.jid)
+  });
 }
 
-// Ejemplo de uso:
-// const membersInfo = [
-//   { id: '1234567890@s.whatsapp.net', country: 'Mexico' },
-//   { id: '0987654321@s.whatsapp.net', country: 'Argentina' },
-//   // ... más miembros
-// ];
-// tagAllWithFlags(sock, '1234567890-1234567890@g.us', membersInfo);
-
-module.exports = { tagAllWithFlags };
+// Exporta tu handler para el bot
+module.exports = {
+  command: ['todos'],
+  groupOnly: true,
+  handler: onCommandTodos
+};
