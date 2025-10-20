@@ -1,7 +1,12 @@
+require('dotenv').config();
+
 module.exports = {
-  ownerNumber: '523310167470', // Número del dueño con código de país
-  prefix: '.', // Prefijo para los comandos
-  sessionName: 'Itachi 🚀', // Nombre del archivo de sesión
+  ownerNumber: process.env.OWNER_NUMBER || '523310167470',
+  prefix: process.env.PREFIX || '.',
+  sessionName: process.env.SESSION_NAME || 'Itachi 🚀',
+  welcomeMessage: process.env.WELCOME_MESSAGE || '¡Hola! Soy Chappie 🤖',
+  port: process.env.PORT || 3000,
+  apiKey: process.env.API_KEY || '',
   messages: {
     success: '✅ Éxito!',
     admin: 'Este comando es solo para administradores!',
@@ -12,25 +17,5 @@ module.exports = {
     bot: 'Este comando es solo para el bot!',
     wait: '⏳ Procesando...',
     error: '❌ Ocurrió un error!',
-  },
-  // Puedes agregar más configuraciones aquí
-}
-
-// Si usas Node.js >=18, fetch ya está disponible. Si no, instala node-fetch:
-// npm install node-fetch
-
-const fetch = require("node-fetch"); // Si usas Node.js <18
-
-async function consumirAPI() {
-  const url = "https://api.ejemplo.com/datos";
-  try {
-    const respuesta = await fetch(url);
-    if (!respuesta.ok) throw new Error("Error en la petición");
-    const datos = await respuesta.json();
-    console.log(datos);
-  } catch (error) {
-    console.error("Error al consumir la API:", error);
   }
-}
-
-consumirAPI();
+};
