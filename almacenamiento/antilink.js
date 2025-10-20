@@ -1,32 +1,52 @@
-const linkRegex = /(https?:\/\/)?(www\.)?(chat\.whatsapp\.com|wa\.me|bit\.ly|t\.me|discord\.gg|instagram\.com|facebook\.com|youtu\.be|youtube\.com|twitter\.com|tiktok\.com|telegram\.me|telegram\.dog)\/[^\s]+/gi;
+/*
+ * Comando: antilink 1 / antilink 0
+ * Función: Activa o desactiva el sistema antilink en el grupo. El bot eliminará o advertirá a usuarios que envíen enlaces no permitidos.
+ * Uso: Envía "antilink 1" para activar, "antilink 0" para desactivar el filtro de enlaces.
+ */
 
-const antilink = require('./antilink.js');
-client.on('message', async message => {
-    await antilink(client, message);
-});
+let antilinkGroups = {};
 
-async function antilinkHandler(sock, message, groupMetadata) {
-    try {
-        // Verifica que el mensaje es de grupo y que no es del propio bot
-        if (!message.key.remoteJid.endsWith('@g.us') || message.key.fromMe) return;
+async function onCommandAntilink(m, { groupMetadata, sendMessage }) {
+  if (!groupMetadata) return sendMessage(m.chat, 'Este comando solo funciona en grupos.');
 
-        const texto = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
-        if (linkRegex.test(texto)) {
-            // Elimina el mensaje si el bot es admin
-            const groupAdmins = groupMetadata.participants
-                .filter(p => p.admin !== null)
-                .map(p => p.id);
+  const groupId = m.chat;
+  const text = m.text || "";
 
-            if (groupAdmins.includes(sock.user.id)) {
-                await sock.sendMessage(message.key.remoteJid, { text: '❌ Los enlaces no están permitidos.' }, { quoted: message });
-                await sock.sendMessage(message.key.remoteJid, { delete: message.key });
-            } else {
-                await sock.sendMessage(message.key.remoteJid, { text: 'Se detectó un enlace, pero no soy admin para eliminar el mensaje.' }, { quoted: message });
-            }
-        }
-    } catch (e) {
-        console.error('Error en antilink:', e);
-    }
+  if (text.includes("1")) {
+    antilinkGroups[groupId] = true;
+    await sendMessage(groupId, '✅ Antilink activado.\nLos mensajes con enlaces serán eliminados o advertidos.');
+  } else if (text.includes("0")) {
+    antilinkGroups[groupId] = false;
+    await sendMessage(groupId, '🚫 Antilink desactivado.\nYa se permiten enlaces en este grupo.');
+  } else {
+    await sendMessage(groupId, 'Uso: antilink 1 (activar) | antilink 0 (desactivar)');
+  }
 }
 
-module.exports = { antilinkHandler };
+// Handler para mensajes (debes integrarlo en tu sistema de escucha de mensajes)
+async function onMessage(m, { sendMessage }) {
+  const groupId = m.chat;
+  if (!antilinkGroups[groupId]) return;
+
+  // Regex para detectar enlaces
+  const linkRegex = /(https?:\/\/[^\s]+)|(chat\.whatsapp\.com\/[^\s]+)/i;
+
+  if (linkRegex.test(m.text) && !m.fromMe) {
+    try {
+      await sendMessage(groupId, `🚫 @${m.sender.split('@')[0]}, no se permiten enlaces en este grupo.`, {
+        mentions: [m.sender]
+      });
+      // Si tu framework lo permite:
+      // await deleteMessage(groupId, m.key);
+    } catch (e) {
+      sendMessage(groupId, 'No tengo permisos suficientes para eliminar mensajes.');
+    }
+  }
+}
+
+module.exports = {
+  command: ['antilink'],
+  groupOnly: true,
+  handler: onCommandAntilink,
+  onMessage
+};
