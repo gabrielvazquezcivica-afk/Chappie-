@@ -10,7 +10,7 @@ const countryFlags = {
 }
 
 function getFlagByCountryCode(code = 'MX') {
-  return countryFlags[code] || '🏳️';
+  return countryFlags[code] || '🏳️‍🌈';
 }
 
 /**
@@ -34,7 +34,7 @@ async function handleTodosCommand(message, conn) {
 
   // Mencionar a todos con bandera
   const mentions = [];
-  let text = "👥 *Mencionando a todos:*\n\n";
+  let text = "INVOCANDO MUEBLES 🗣️🔥:*\n\n";
   for (const participant of groupMetadata.participants) {
     const flag = getFlagByCountryCode(participant.countryCode); // Asegúrate de tener esta info
     text += `${flag} @${participant.id.split('@')[0]}\n`;
