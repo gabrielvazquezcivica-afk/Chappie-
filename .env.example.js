@@ -17,4 +17,4 @@ PORT=3000
 API_KEY=pon_tu_api_key_aqui
 
 # API Key específica para YouTube Data API
-YOUTUBE_API_KEY=pon_tu_api_key_de_youtube_aqui
+YOUTUBE_API_KEY=AIzaSyBDC1a2MaAyr2DE2qDnN9IVInwkWFZB348
