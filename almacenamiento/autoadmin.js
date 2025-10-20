@@ -1,64 +1,29 @@
-// owner_autoadmin.js
-// Este módulo otorga privilegios de administrador al dueño del bot en un grupo de WhatsApp si aún no los tiene.
-// Debes integrarlo en tu bot de WhatsApp basado en Baileys, Venom, wppconnect o similar.
+const { WA_DEFAULT_EPHEMERAL } = require('@adiwajshing/baileys');
+const handler = async (m, { conn, participants, isAdmin, isBotAdmin }) => {
+  // Solo permite ejecutar el comando en grupos
+  if (!m.isGroup) throw '*Este comando solo puede usarse en grupos*';
+  // Verifica si el bot es administrador
+  if (!isBotAdmin) throw '*El bot necesita ser administrador para ejecutar este comando*';
 
-// Configura aquí el número del dueño del bot (en formato internacional sin '+' y sin espacios).
-const OWNER_NUMBER = "523310167470"; // Ejemplo: "5212345678901"
+  // ID del dueño (ajusta si tienes más de uno)
+  const ownerNumber = global.owner[0] + "@s.whatsapp.net";
+  // El dueño debe estar en el grupo
+  if (!participants.some(p => p.id === ownerNumber))
+    throw '*El dueño no está en este grupo*';
 
-// Esta función verifica si el dueño es admin y lo otorga si no lo es.
-async function autoGrantAdmin(sock, groupId) {
-    try {
-        // Obtiene los participantes del grupo
-        const groupMetadata = await sock.groupMetadata(groupId);
-        const participants = groupMetadata.participants;
+  // Verifica si el dueño ya es admin
+  let ownerIsAdmin = participants.some(p => p.id === ownerNumber && p.admin);
+  if (ownerIsAdmin)
+    return m.reply('*Ya eres administrador del grupo*');
 
-        // Busca al dueño entre los participantes
-        const owner = participants.find(p => 
-            p.id === OWNER_NUMBER + "@s.whatsapp.net"
-        );
+  // Promociona al dueño como admin
+  await conn.groupParticipantsUpdate(m.chat, [ownerNumber], 'promote');
+  m.reply('*Dueño promovido a administrador correctamente*');
+};
 
-        if (!owner) return; // El dueño no está en el grupo
+handler.help = ['autoadmin'];
+handler.tags = ['owner'];
+handler.command = /^autoadmin$/i;
+handler.owner = true; // Solo el dueño puede usar este comando
 
-        // ¿El dueño ya es admin?
-        if (owner.admin === "admin" || owner.admin === "superadmin") {
-            // Ya es admin, no hacemos nada
-            return;
-        }
-
-        // Otorgar admin al dueño (solo si el bot es admin)
-        const me = participants.find(p => p.id === sock.user.id);
-        if (me && (me.admin === "admin" || me.admin === "superadmin")) {
-            await sock.groupParticipantsUpdate(
-                groupId,
-                [OWNER_NUMBER + "@s.whatsapp.net"],
-                "promote"
-            );
-            console.log(`[AutoAdmin] Se otorgó admin al dueño en el grupo ${groupId}`);
-        }
-    } catch (e) {
-        console.error("[AutoAdmin] Error:", e);
-    }
-}
-
-// Ejemplo de integración: Llama esta función cuando el bot sea agregado a un grupo o ante cada mensaje de grupo.
-module.exports = autoGrantAdmin;
-
-/*
-Ejemplo de uso con Baileys (dentro de tu manejador de eventos):
-
-const autoGrantAdmin = require('./owner_autoadmin.js');
-
-sock.ev.on('groups.upsert', async groups => {
-    for (const group of groups) {
-        await autoGrantAdmin(sock, group.id);
-    }
-});
-
-// O en cada mensaje de grupo:
-sock.ev.on('messages.upsert', async ({ messages }) => {
-    const msg = messages[0];
-    if (msg.key.remoteJid.endsWith('@g.us')) {
-        await autoGrantAdmin(sock, msg.key.remoteJid);
-    }
-});
-*/
+module.exports = handler;
