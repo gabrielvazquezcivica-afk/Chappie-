@@ -8,7 +8,7 @@ PREFIX=.
 SESSION_NAME=Itachi 🚀
 
 # Mensaje de bienvenida
-WELCOME_MESSAGE=¡Hola! Soy Chappie 🤖
+WELCOME_MESSAGE=¡Hola! Soy Itachi 🚀
 
 # Puerto (para servidor, si aplica)
 PORT=3000
