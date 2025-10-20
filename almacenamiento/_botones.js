@@ -1,5 +1,5 @@
 const { makeWASocket, useMultiFileAuthState, MessageType } = require('@whiskeysockets/baileys');
-const BOT_NAME = "MiBot"; // Cambia esto por el nombre real de tu bot
+const BOT_NAME = "Chappie 🔱"; // Cambia esto por el nombre real de tu bot
 
 // Variable global para modo admin
 let modoAdmin = true; // Cambia a false para desactivar
