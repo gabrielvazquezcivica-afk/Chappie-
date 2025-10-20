@@ -1,6 +1,8 @@
-const { makeWASocket, useMultiFileAuthState, DisconnectReason, getContentType } = require('@whiskeysockets/baileys');
+const { makeWASocket, useMultiFileAuthState, MessageType } = require('@whiskeysockets/baileys');
+const BOT_NAME = "MiBot"; // Cambia esto por el nombre real de tu bot
 
-let modoAdmin = true; // Cambia a false para desactivar el modo admin
+// Variable global para modo admin
+let modoAdmin = true; // Cambia a false para desactivar
 
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info');
@@ -15,31 +17,47 @@ async function startBot() {
         if (type !== 'notify') return;
         const msg = messages[0];
         if (!msg.message || !msg.key.remoteJid) return;
-        if (!modoAdmin) return; // Solo responde si el modo admin está activo
 
-        const contentType = getContentType(msg.message);
+        // Solo ejecuta si el modo admin está activo
+        if (!modoAdmin) return;
 
-        // Mensaje de texto
-        if (contentType === 'conversation' && msg.message.conversation.startsWith('.n ')) {
-            const textoNota = msg.message.conversation.slice(3).trim();
-            if (textoNota.length > 0) {
-                await sock.sendMessage(msg.key.remoteJid, { text: textoNota }, { quoted: msg });
+        // Detecta si el mensaje es .n (ya sea en texto, o como reply)
+        let esComandoN = false;
+        let textoNota = "";
+
+        if (msg.message.conversation && msg.message.conversation.startsWith('.n')) {
+            esComandoN = true;
+            textoNota = msg.message.conversation.slice(2).trim();
+        } else if (msg.message?.extendedTextMessage?.text?.startsWith('.n')) {
+            esComandoN = true;
+            textoNota = msg.message.extendedTextMessage.text.slice(2).trim();
+        }
+
+        if (esComandoN) {
+            let contenidoReenviar;
+            // Si el mensaje es reply, reenvía el mensaje citado
+            if (msg.message?.extendedTextMessage?.contextInfo?.quotedMessage) {
+                contenidoReenviar = msg.message.extendedTextMessage.contextInfo.quotedMessage;
+            } else if (textoNota) {
+                // Si .n va seguido de texto, envía ese texto
+                contenidoReenviar = { text: textoNota };
+            } else {
+                // Si solo .n, responde que cite un mensaje o escriba texto
+                await sock.sendMessage(msg.key.remoteJid, {
+                    text: "Usa .n como respuesta a un mensaje, sticker, audio, encuesta, o seguido de texto."
+                }, { quoted: msg });
+                return;
             }
-        }
 
-        // Sticker
-        if (contentType === 'stickerMessage' && msg.message.stickerMessage.caption && msg.message.stickerMessage.caption.startsWith('.n')) {
-            await sock.sendMessage(msg.key.remoteJid, { sticker: msg.message.stickerMessage }, { quoted: msg });
-        }
-
-        // Audio
-        if (contentType === 'audioMessage' && msg.message.audioMessage.caption && msg.message.audioMessage.caption.startsWith('.n')) {
-            await sock.sendMessage(msg.key.remoteJid, { audio: msg.message.audioMessage, mimetype: 'audio/mp4' }, { quoted: msg });
-        }
-
-        // Encuesta (poll)
-        if (contentType === 'pollCreationMessage' && msg.message.pollCreationMessage.name.startsWith('.n')) {
-            await sock.sendMessage(msg.key.remoteJid, { poll: msg.message.pollCreationMessage }, { quoted: msg });
+            // Envía el contenido y firma en gris
+            await sock.sendMessage(msg.key.remoteJid, contenidoReenviar, { quoted: msg });
+            await sock.sendMessage(
+                msg.key.remoteJid,
+                {
+                    text: `> ${BOT_NAME}`,
+                    contextInfo: { forwardingScore: 999, isForwarded: true }
+                }
+            );
         }
     });
 }
