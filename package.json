@@ -1,6 +1,6 @@
 {
   "name": "Chappie-",
-  "version": "1.0.0",
+  "version": "5.0.0",
   "description": "Bot de WhatsApp multi-función usando Baileys",
   "main": "index.js",
   "scripts": {
