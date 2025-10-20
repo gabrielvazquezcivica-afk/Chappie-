@@ -5,10 +5,10 @@ OWNER_NUMBER=523310167470
 PREFIX=.
 
 # Nombre de la sesión
-SESSION_NAME=Itachi 🚀
+SESSION_NAME= Chappie 🔱
 
 # Mensaje de bienvenida
-WELCOME_MESSAGE=¡Hola! Soy Itachi 🚀
+WELCOME_MESSAGE=¡Hola! Soy Chappie 🔱
 
 # Puerto (para servidor, si aplica)
 PORT=3000
