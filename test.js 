@@ -1,0 +1,65 @@
+import makeWASocket, {
+  useSingleFileAuthState,
+  fetchLatestBaileysVersion,
+  DisconnectReason
+} from '@adiwajshing/baileys';
+import P from 'pino';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+import fs from 'fs';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const SESSION_FILE_PATH = resolve(__dirname, './session.test.json');
+
+async function connectToWhatsApp() {
+  const { state, saveState } = useSingleFileAuthState(SESSION_FILE_PATH);
+
+  // Opcional: obtener la última versión soportada de WA Web
+  let version;
+  try {
+    const v = await fetchLatestBaileysVersion();
+    version = v.version;
+    console.log('Usando versión de WhatsApp Web:', version.join('.'));
+  } catch (e) {
+    console.log('No se pudo obtener la última versión, usando la predeterminada.');
+    version = undefined;
+  }
+
+  const sock = makeWASocket({
+    logger: P({ level: 'silent' }),
+    printQRInTerminal: true,
+    auth: state,
+    version
+  });
+
+  sock.ev.on('creds.update', saveState);
+
+  sock.ev.on('connection.update', (update) => {
+    const { connection, lastDisconnect } = update;
+    if (connection === 'close') {
+      const reason = lastDisconnect?.error?.output?.statusCode;
+      if (reason !== DisconnectReason.loggedOut) {
+        console.log('Reconectando...');
+        connectToWhatsApp();
+      } else {
+        console.log('Sesión cerrada. Borra session.test.json para volver a escanear el QR.');
+      }
+    } else if (connection === 'open') {
+      console.log('Conectado exitosamente a WhatsApp!');
+    }
+  });
+
+  sock.ev.on('messages.upsert', async (m) => {
+    const msg = m.messages[0];
+    if (!msg.message || msg.key.fromMe) return;
+    const sender = msg.key.remoteJid;
+
+    // Responde a !ping
+    const text = msg.message.conversation || msg.message.extendedTextMessage?.text || "";
+    if (text.trim() === "!ping") {
+      await sock.sendMessage(sender, { text: "Pong 🏓 (desde test.js)" }, { quoted: msg });
+    }
+  });
+}
+
+connectToWhatsApp();
