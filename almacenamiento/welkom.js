@@ -1,4 +1,4 @@
-const fs = require('fs');
+const fs = import('fs');
 
 // Lista negra de grupos, si quieres excluir algunos grupos
 const gruposExcluidos = [
