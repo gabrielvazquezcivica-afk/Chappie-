@@ -1,44 +1,54 @@
-// Requiere Baileys v7+
-// Instala: npm install @whiskeysockets/baileys
-const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require("@whiskeysockets/baileys");
+const linkRegex = /(https?:\/\/[^\s]+)/gi;
 
-async function startBot() {
-  const { state, saveCreds } = await useMultiFileAuthState("auth_info");
-  const { version } = await fetchLatestBaileysVersion();
-  const sock = makeWASocket({ version, auth: state });
+let antilinkStatus = {}; // Guardamos el estado por grupo
 
-  sock.ev.on("messages.upsert", async ({ messages, type }) => {
-    if (type !== "notify") return;
-    for (const msg of messages) {
-      if (!msg.message || !msg.key.remoteJid) continue;
+// Evento de mensajes
+async function onMessage({ m, sock }) {
+    const groupId = m.key.remoteJid;
 
-      let text = "";
-      // Extrae el texto del mensaje
-      if (msg.message.conversation) text = msg.message.conversation;
-      else if (msg.message.extendedTextMessage) text = msg.message.extendedTextMessage.text;
-      else continue;
+    // Solo grupos
+    if (!groupId.endsWith('@g.us')) return;
 
-      // Expresión regular para detectar links
-      const regexLink = /(https?:\/\/[^\s]+)|(www\.[^\s]+)|(\.com\b)|(\.net\b)|(\.org\b)/i;
-      if (regexLink.test(text)) {
-        try {
-          // Elimina el mensaje con link
-          await sock.sendMessage(msg.key.remoteJid, {
-            delete: msg.key
-          });
+    // Comando para admins
+    if (m.message?.conversation?.startsWith('!antilink')) {
+        const isAdmin = (await sock.groupMetadata(groupId))
+            .participants.find(p => p.id === m.key.participant && p.admin);
 
-          // Envía aviso
-          await sock.sendMessage(msg.key.remoteJid, {
-            text: `🚫 No se permiten enlaces en este grupo. Tu mensaje fue eliminado.`
-          }, { quoted: msg });
-        } catch (err) {
-          console.error("Error al borrar mensaje:", err);
+        if (!isAdmin) {
+            await sock.sendMessage(groupId, { text: 'Solo los administradores pueden usar este comando.' }, { quoted: m });
+            return;
         }
-      }
+        const args = m.message.conversation.split(' ');
+        if (args[1] === 'on') {
+            antilinkStatus[groupId] = true;
+            await sock.sendMessage(groupId, { text: '🔗 Antilink activado.' }, { quoted: m });
+        } else if (args[1] === 'off') {
+            antilinkStatus[groupId] = false;
+            await sock.sendMessage(groupId, { text: '🔗 Antilink desactivado.' }, { quoted: m });
+        } else {
+            await sock.sendMessage(groupId, { text: 'Uso: !antilink on/off' }, { quoted: m });
+        }
+        return;
     }
-  });
 
-  sock.ev.on("creds.update", saveCreds);
+    // Antilink activo
+    if (antilinkStatus[groupId]) {
+        // Solo usuarios normales (no admins)
+        const sender = m.key.participant || m.key.fromMe ? m.key.remoteJid : m.key.participant;
+        const groupMetadata = await sock.groupMetadata(groupId);
+        const senderData = groupMetadata.participants.find(p => p.id === sender);
+
+        if (senderData && !senderData.admin && m.message && linkRegex.test(m.message.conversation || '')) {
+            // Eliminar el mensaje
+            await sock.sendMessage(groupId, {
+                delete: m.key
+            });
+            // Aviso al grupo
+            await sock.sendMessage(groupId, {
+                text: `🚫 No se permiten enlaces en este grupo.`
+            });
+        }
+    }
 }
 
-startBot();
+module.exports = { onMessage };
