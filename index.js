@@ -1,117 +1,100 @@
-// Compatibilidad robusta con distintas exportaciones de @adiwajshing/baileys
-const rawBaileys = require('@adiwajshing/baileys');
-const qrcodeTerminal = require('qrcode-terminal');
-const qrcode = require('qrcode');
-const fs = require('fs');
+import { join, dirname } from 'path';
+import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
+import { watchFile, unwatchFile, existsSync, mkdirSync } from 'fs';
+import cfonts from 'cfonts';
+import { createInterface } from 'readline';
+import yargs from 'yargs';
+import chalk from 'chalk';
+import { spawn } from 'child_process';
 
-// Si el paquete se exportó como default (ESM transpiled), usa ese objeto; si no, usa rawBaileys
-const BAILEYS = (rawBaileys && rawBaileys.default) ? rawBaileys.default : rawBaileys;
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const require = createRequire(__dirname);
+const { name, description, author, version } = require(join(__dirname, './package.json'));
+const { say } = cfonts;
+const rl = createInterface(process.stdin, process.stdout);
 
-// Desestructura las funciones/clases que necesitamos
-const {
-  useSingleFileAuthState,
-  makeWASocket,
-  fetchLatestBaileysVersion,
-  DisconnectReason
-} = BAILEYS || {};
-
-// Si algo falta, imprime debug con las claves exportadas
-if (typeof useSingleFileAuthState !== 'function' || typeof makeWASocket === 'undefined') {
-  console.error('La versión de @adiwajshing/baileys instalada no proporciona useSingleFileAuthState o makeWASocket en el formato esperado.');
-  console.error('Recomiendo instalar @adiwajshing/baileys@^5.0.0 con: npm install @adiwajshing/baileys@^5.0.0 --save');
-  try {
-    console.error('Exported keys from require("@adiwajshing/baileys"):', Object.keys(rawBaileys || {}).join(', '));
-    if (rawBaileys && rawBaileys.default) {
-      console.error('Exported keys from require("@adiwajshing/baileys").default:', Object.keys(rawBaileys.default || {}).join(', '));
-    }
-  } catch (e) {
-    console.error('No se pudo obtener keys de debug:', e);
-  }
-  process.exit(1);
-}
-
-const AUTH_FILE = './auth_info.json';
-const QR_IMAGE = './qr.png';
-
-async function start() {
-  // Crea o carga archivo de sesión
-  const { state, saveState } = useSingleFileAuthState(AUTH_FILE);
-
-  // Obtener versión recomendada (si falla, usamos undefined)
-  let version;
-  try {
-    const verRes = await fetchLatestBaileysVersion();
-    version = verRes?.version;
-  } catch (e) {
-    version = undefined;
-  }
-
-  const sock = makeWASocket({
-    auth: state,
-    printQRInTerminal: false,
-    version
-  });
-
-  sock.ev.on('creds.update', saveState);
-
-  sock.ev.on('connection.update', async (update) => {
-    const { connection, lastDisconnect, qr } = update;
-
-    if (qr) {
-      qrcodeTerminal.generate(qr, { small: true });
-      console.log('----- QR string (puedes copiarlo si no puedes escanear el terminal) -----');
-      console.log(qr);
-
-      try {
-        await qrcode.toFile(QR_IMAGE, qr);
-        console.log(`QR guardado en ${QR_IMAGE}`);
-      } catch (err) {
-        console.warn('No se pudo guardar QR como imagen:', err);
+function verify() {
+  const dirs = ['tmp', 'Sesiones/Principal'];
+  for (const dir of dirs) {
+    if (typeof dir === 'string' && dir.trim() !== '') {
+      if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true });
       }
+    } else {
+      console.warn('Ruta inválida o no definida:', dir);
     }
-
-    if (connection === 'open') {
-      console.log('Conectado a WhatsApp ✅');
-      try { if (fs.existsSync(QR_IMAGE)) fs.unlinkSync(QR_IMAGE); } catch (e) {}
-    }
-
-    if (connection === 'close') {
-      const reason = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.message;
-      console.log('Conexión cerrada:', reason);
-
-      const statusCode = lastDisconnect?.error?.output?.statusCode;
-      if (statusCode === DisconnectReason?.loggedOut || statusCode === 401) {
-        console.log('La sesión fue cerrada (logged out). Elimina el archivo de sesión y vuelve a iniciar para obtener un nuevo QR.');
-      } else {
-        console.log('Reiniciando socket...');
-        start().catch(err => console.error('Error reiniciando:', err));
-      }
-    }
-  });
-
-  sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    if (type !== 'notify') return;
-    const msg = messages[0];
-    if (!msg.message || msg.key.fromMe) return;
-
-    const from = msg.key.remoteJid;
-    const text = msg.message.conversation || msg.message?.extendedTextMessage?.text || '';
-
-    console.log(`Mensaje de ${from}:`, text);
-
-    if (text.toLowerCase().trim() === 'ping') {
-      await sock.sendMessage(from, { text: 'pong' });
-    }
-  });
-
-  process.on('SIGINT', async () => {
-    console.log('Cerrando socket...');
-    await sock.logout().catch(() => {});
-    process.exit(0);
-  });
+  }
 }
+verify();
 
-start().catch(err => {
-  console.error('Error al iniciar el bot:', err);
-  process.exit(1);
+// Diseño para "Chappie Bot"
+say('Chappie ᑲ᥆𝗍', {
+  font: 'block',
+  align: 'center',
+  colors: ['cyan', 'white'],
+  background: 'black'
 });
+
+say(`Developed By • Chappie Team`, {
+  font: 'console',
+  align: 'center',
+  colors: ['magenta']
+});
+
+let isRunning = false;
+let child;
+
+function start(file) {
+  if (isRunning) return;
+  isRunning = true;
+
+  const args = [join(__dirname, file), ...process.argv.slice(2)];
+  child = spawn('node', args, { stdio: ['inherit', 'inherit', 'inherit', 'ipc'] });
+
+  child.on('message', data => {
+    switch (data) {
+      case 'reset':
+        child.kill();
+        isRunning = false;
+        start(file);
+        break;
+      case 'uptime':
+        child.send(process.uptime());
+        break;
+    }
+  });
+
+  child.on('exit', (code) => {
+    isRunning = false;
+    console.error('🚩 Error :\n', code);
+    process.exit();
+  });
+
+  const opts = yargs(process.argv.slice(2)).exitProcess(false).parse();
+  if (!opts['test']) {
+    if (!rl.listenerCount('line')) {
+      rl.on('line', line => {
+        if (child && child.connected) {
+          child.send(line.trim());
+        }
+      });
+    }
+  }
+
+  watchFile(args[0], () => {
+    unwatchFile(args[0]);
+    if (child) child.kill();
+    isRunning = false;
+    start(file);
+  });
+}
+
+process.on('warning', (warning) => {
+  if (warning.name === 'MaxListenersExceededWarning') {
+    console.warn('🚩 Se excedió el límite de Listeners en :');
+    console.warn(warning.stack);
+  }
+});
+
+start('main.js');
