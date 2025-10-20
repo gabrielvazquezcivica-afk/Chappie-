@@ -1,4 +1,4 @@
-const { WA_DEFAULT_EPHEMERAL } = require('@adiwajshing/baileys');
+const { WA_DEFAULT_EPHEMERAL } = import('@adiwajshing/baileys');
 const handler = async (m, { conn, participants, isAdmin, isBotAdmin }) => {
   // Solo permite ejecutar el comando en grupos
   if (!m.isGroup) throw '*Este comando solo puede usarse en grupos*';
