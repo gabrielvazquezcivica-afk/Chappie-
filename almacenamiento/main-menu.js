@@ -24,8 +24,8 @@ const sectionDivider = '╰━━━━━━━━━━━━━━━━━�
 const menuFooter = `
 ╭─❒ 「📌 INFO FINAL」
 │ Usa los comandos con el prefijo correspondiente
-│ Ejemplo: .ping | .menu
-│ Bot: Chappie-Bot
+│ Ejemplo: .menu
+│ GRACIAS POR PREFERIR Chappie-Bot 🔱
 ╰❒
 `.trim();
 
