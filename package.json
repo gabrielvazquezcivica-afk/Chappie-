@@ -24,30 +24,3 @@
     "nodemon": "^2.0.7"
   }
 }
-# Archivo .env de ejemplo para Chappie
-
-# Puerto en el que corre el servidor (opcional, si tiene servidor web)
-PORT=3000
-
-# Nombre de usuario del bot (puedes personalizarlo)
-BOT_NAME=Chappie
-
-# Número del propietario del bot (con código de país, sin +)
-OWNER_NUMBER=523310167470
-
-# Prefijo para los comandos del bot
-PREFIX=.
-
-# Clave de API para servicios externos (opcional, si usas alguna API)
-API_KEY=pon_tu_api_key_aqui
-
-# Session data (algunos bots usan una cadena para mantener la sesión)
-SESSION_ID=pon_tu_session_id_aqui
-
-# Path a la carpeta de multimedia (si usas una carpeta específica)
-MEDIA_PATH=./media
-
-# Configuración de mensajes de bienvenida (opcional)
-WELCOME_MESSAGE=¡Hola! Soy Chappie 🤖
-
-# Otras variables según lo que requiera tu bot...
