@@ -1,321 +1,197 @@
 /**
  * main.js
- * Bot de WhatsApp con @adiwajshing/baileys
- * Añadido: stickers, respuesta a imágenes, manejo de comandos en grupos (info, kick de ejemplo)
+ * Bot básico de WhatsApp usando @adiwajshing/baileys
+ * Inspirado en: https://github.com/gabrielvazquezcivica-afk/ITACHI-BOT-/blob/main/main.js
  *
- * Requisitos:
- *  - Node.js >= 16
- *  - npm i @adiwajshing/baileys@latest sharp
+ * Instrucciones rápidas:
+ * 1) Coloca este archivo en la raíz del repo (o en la carpeta que prefieras).
+ * 2) Instala dependencias:
+ *    npm install @adiwajshing/baileys pino
+ * 3) Ejecuta: node main.js
+ * 4) Escanea el QR que aparecerá en la terminal (si no existe session.json).
  *
- * Uso:
- *  - node main.js
- *  - Escanea el QR la primera vez. La sesión se guarda en auth_info.json.
- *
- * Notas:
- *  - La creación de stickers usa sharp para convertir la imagen a webp.
- *  - El comando de kick es un ejemplo que requiere permisos de administrador en el grupo
- *    y que el bot también sea admin del grupo.
+ * Este ejemplo es deliberadamente simple: maneja conexión/rea-conexión,
+ * guarda sesión en session.json y responde comandos básicos.
  */
 
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-const sharp = require('sharp');
-
+const pino = require('pino');
 const {
   default: makeWASocket,
   useSingleFileAuthState,
   fetchLatestBaileysVersion,
   DisconnectReason,
-  downloadContentFromMessage
+  makeInMemoryStore
 } = require('@adiwajshing/baileys');
+const fs = require('fs');
+const path = require('path');
 
-const AUTH_FILE = path.resolve('./auth_info.json');
-const TMP_DIR = path.resolve('./tmp');
-if (!fs.existsSync(TMP_DIR)) fs.mkdirSync(TMP_DIR, { recursive: true });
+const logger = pino({ level: 'info' });
 
-// useSingleFileAuthState crea/usa un archivo con la sesión (credenciales)
-const { state, saveState } = useSingleFileAuthState(AUTH_FILE);
-
-async function bufferFromStream(stream) {
-  let buffer = Buffer.from([]);
-  for await (const chunk of stream) {
-    buffer = Buffer.concat([buffer, chunk]);
-  }
-  return buffer;
-}
-
-// Convierte un buffer de imagen a webp optimizado para sticker (512 max)
-async function imageToWebp(buffer, outPath) {
-  // Ajusta tamaño manteniendo relación, máximo 512
-  await sharp(buffer)
-    .resize(512, 512, { fit: 'inside' })
-    .webp({ quality: 80 })
-    .toFile(outPath);
-  return outPath;
-}
+// Archivo donde se guardará la sesión (credenciales)
+const SESSION_FILE_PATH = path.resolve(__dirname, './session.json');
 
 async function startBot() {
+  // Cargar versión de baileys compatible (opcional, ayuda a evitar problemas de versión)
+  let version;
   try {
-    const { version, isLatest } = await fetchLatestBaileysVersion();
-    console.log('Conectando con Baileys WA version:', version, 'isLatest:', isLatest);
+    const ver = await fetchLatestBaileysVersion();
+    version = ver.version;
+    logger.info('Usando versión de baileys:', version.join('.'));
+  } catch (e) {
+    logger.warn('No se pudo obtener la versión más reciente de Baileys, se usará la predeterminada.');
+    version = undefined;
+  }
 
-    const sock = makeWASocket({
-      version,
-      auth: state,
-      printQRInTerminal: true,
-      logger: undefined
-    });
+  // Crea/usa el estado en un solo archivo (session.json)
+  const { state, saveState } = useSingleFileAuthState(SESSION_FILE_PATH);
 
-    sock.ev.on('creds.update', saveState);
+  // Opcional: store en memoria para mantener info de contactos/chats (útil en bots más avanzados)
+  const store = makeInMemoryStore({ logger: logger.child({ level: 'silent' }) });
 
-    sock.ev.on('connection.update', (update) => {
-      const { connection, lastDisconnect, qr } = update;
-      if (qr) console.log('Nuevo QR generado. Escanea con tu WhatsApp.');
-      if (connection === 'open') {
-        console.log('Conectado a WhatsApp!');
-      } else if (connection === 'close') {
-        console.log('Conexión cerrada:', lastDisconnect?.error || lastDisconnect);
-        const statusCode = lastDisconnect?.error?.output?.statusCode;
-        if (statusCode === DisconnectReason.loggedOut) {
-          console.log('Sesión cerrada. Borrando credenciales...');
-          try { fs.unlinkSync(AUTH_FILE); } catch (e) { /* ignore */ }
+  // Instancia del socket
+  const sock = makeWASocket({
+    logger: logger,
+    printQRInTerminal: true, // imprime QR en la terminal si hace falta escanear
+    auth: state,
+    version // si es undefined, Baileys usará la versión incluida
+  });
+
+  // Vincular eventos del store
+  store.bind(sock.ev);
+
+  // Guardar credenciales cuando cambien
+  sock.ev.on('creds.update', saveState);
+
+  // Manejar actualizaciones de conexión
+  sock.ev.on('connection.update', (update) => {
+    const { connection, lastDisconnect, qr } = update;
+
+    if (qr) {
+      // El QR ya se imprime en la terminal por printQRInTerminal: true,
+      // pero puedes manejarlo aquí si deseas subirlo a un servicio o similar.
+      logger.info('Se generó QR para escaneo.');
+    }
+
+    if (connection) logger.info('connection update', connection);
+
+    if (connection === 'close') {
+      // Intentar reconectar salvo que la sesión haya quedado cerrada por logout
+      const reason = (lastDisconnect && lastDisconnect.error && lastDisconnect.error.output) ?
+        lastDisconnect.error.output.statusCode :
+        null;
+
+      logger.warn('Conexión cerrada. Razón:', reason);
+
+      // Si se cerró por logout, elimina la session.json para forzar escaneo manual la próxima vez
+      if (lastDisconnect && lastDisconnect.error && lastDisconnect.error.output) {
+        const statusCode = lastDisconnect.error.output.statusCode;
+        if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
+          logger.error('La sesión fue desconectada (logged out). Eliminando session.json y finalizando.');
+          try {
+            fs.unlinkSync(SESSION_FILE_PATH);
+          } catch (e) {}
+          return; // no reconectar automáticamente
         }
-        setTimeout(() => startBot(), 2000);
       }
-    });
 
-    // Helper: enviar texto
-    const sendText = async (jid, body, quoted = null) => {
-      await sock.sendMessage(jid, { text: body }, { quoted });
-    };
+      // Reconecta llamando a startBot de nuevo
+      logger.info('Reiniciando bot en 5s...');
+      setTimeout(() => startBot(), 5000);
+    }
 
-    // Helper: obtener texto desde distintos tipos de mensaje
-    const extractText = (msg) => {
-      if (!msg.message) return '';
-      const type = Object.keys(msg.message)[0];
-      if (type === 'conversation') return msg.message.conversation || '';
-      if (type === 'extendedTextMessage') return msg.message.extendedTextMessage?.text || '';
-      if (type === 'imageMessage') return msg.message.imageMessage?.caption || '';
-      if (type === 'videoMessage') return msg.message.videoMessage?.caption || '';
-      return '';
-    };
+    if (connection === 'open') {
+      logger.info('Conexión establecida correctamente.');
+    }
+  });
 
-    // Helper: obtener un mensaje citado si existe
-    const getQuoted = (msg) => {
-      try {
-        return msg.message?.extendedTextMessage?.contextInfo?.quotedMessage ? msg.message.extendedTextMessage.contextInfo : null;
-      } catch {
-        return null;
-      }
-    };
+  // Manejar mensajes entrantes
+  sock.ev.on('messages.upsert', async (m) => {
+    try {
+      // m: { messages: [...], type: 'append'|'notify'|'prepend' }
+      const messages = m.messages;
+      if (!messages || messages.length === 0) return;
 
-    // Manejo de mensajes
-    sock.ev.on('messages.upsert', async (m) => {
-      try {
-        if (!m || !m.messages) return;
-        const msg = m.messages[0];
-        if (!msg.message) return;
-        if (msg.key && msg.key.remoteJid === 'status@broadcast') return; // ignorar estados
+      for (const msg of messages) {
+        // Evitar mensajes del propio sistema (status, protocol, etc.)
+        if (!msg.message || msg.key && msg.key.remoteJid === 'status@broadcast') continue;
+        // Evitar mensajes de grupos no deseados si quieres (ejemplo)
+        // if (msg.key.remoteJid.endsWith('@g.us')) continue;
 
         const from = msg.key.remoteJid;
         const isGroup = from.endsWith('@g.us');
-        const sender = msg.key.participant || msg.key.remoteJid;
+        const sender = (msg.key.participant) ? msg.key.participant : msg.key.remoteJid;
+        const messageType = Object.keys(msg.message)[0];
+        let text = '';
 
-        const text = extractText(msg);
-        const trimmed = text.trim();
-        const prefix = (trimmed.startsWith('!') || trimmed.startsWith('/')) ? trimmed[0] : null;
-
-        // RESPUESTA AUTOMÁTICA A IMÁGENES (cuando NO es comando)
-        const msgType = Object.keys(msg.message)[0];
-        if (!prefix && (msgType === 'imageMessage' || msgType === 'videoMessage')) {
-          // Responder agradeciendo y mostrando que se recibió la imagen
-          await sendText(from, 'Imagen recibida ✅', msg);
-          return;
+        // Soporte para mensajes de texto simples y extendedTextMessage
+        if (messageType === 'conversation') {
+          text = msg.message.conversation;
+        } else if (messageType === 'extendedTextMessage') {
+          text = msg.message.extendedTextMessage.text;
+        } else if (messageType === 'imageMessage' && msg.message.imageMessage.caption) {
+          text = msg.message.imageMessage.caption;
+        } else if (messageType === 'videoMessage' && msg.message.videoMessage.caption) {
+          text = msg.message.videoMessage.caption;
         }
 
-        if (!prefix) return;
+        if (!text) continue;
 
-        const args = trimmed.slice(1).trim().split(/\s+/).filter(a => !!a);
-        const command = (args.shift() || '').toLowerCase();
+        const body = text.trim();
 
-        console.log(`Comando: ${command} from ${sender} (group: ${isGroup})`);
+        logger.info({ from, sender, body: body });
 
-        // COMMAND: help
-        if (command === 'help') {
+        // Comandos básicos (ejemplo)
+        if (body === '!ping' || body === '/ping') {
+          await sock.sendMessage(from, { text: 'Pong 🏓' }, { quoted: msg });
+        } else if (body.startsWith('!echo ') || body.startsWith('/echo ')) {
+          const echoText = body.split(' ').slice(1).join(' ');
+          await sock.sendMessage(from, { text: echoText || 'Nada que repetir.' }, { quoted: msg });
+        } else if (body === '!help' || body === '/help') {
           const helpMsg = [
             'Comandos disponibles:',
-            '!ping - Comprueba si el bot responde',
-            '!help - Muestra esta ayuda',
-            '!echo <texto> - Repite el texto',
-            '!sticker - Convierte la imagen (enviado o citado) a sticker',
-            '!groupinfo - Muestra información del grupo (solo en grupos)',
-            '!kick @user - Expulsa a la persona (solo admins de grupo)',
+            '!ping - responde Pong',
+            '!echo <texto> - repite el texto',
+            '!help - muestra esta ayuda'
           ].join('\n');
-          await sendText(from, helpMsg, msg);
-          return;
-        }
-
-        // COMMAND: ping
-        if (command === 'ping') {
-          const start = Date.now();
-          await sendText(from, 'Pong! ⏱️', msg);
-          const latency = Date.now() - start;
-          await sendText(from, `Latencia aproximada: ${latency}ms`, msg);
-          return;
-        }
-
-        // COMMAND: echo
-        if (command === 'echo') {
-          const reply = args.join(' ');
-          if (!reply) await sendText(from, 'Uso: !echo <texto>', msg);
-          else await sendText(from, reply, msg);
-          return;
-        }
-
-        // COMMAND: sticker -> convierte imagen enviada o imagen citada a sticker
-        if (command === 'sticker' || command === 'stiker') {
-          // Determinar si el mensaje actual contiene una imagen/video o cita una imagen/video
-          let mediaMsg = null;
-          // imagen/video directo
-          if (msgType === 'imageMessage' || msgType === 'videoMessage') {
-            mediaMsg = msg.message[msgType];
-          } else {
-            // buscar mensaje citado
-            const ctx = getQuoted(msg);
-            if (ctx && ctx.quotedMessage) {
-              const quotedMsg = ctx.quotedMessage;
-              const qType = Object.keys(quotedMsg)[0];
-              if (qType === 'imageMessage' || qType === 'videoMessage') {
-                mediaMsg = quotedMsg[qType];
-              }
-            }
-          }
-
-          if (!mediaMsg) {
-            await sendText(from, 'No veo ninguna imagen o video para convertir. Envía o cita una imagen y usa !sticker', msg);
-            return;
-          }
-
-          // Descargar media
-          try {
-            const mimeType = mediaMsg.mimetype || '';
-            const type = mimeType.startsWith('image') ? 'image' : 'video';
-            const stream = await downloadContentFromMessage(mediaMsg, type);
-            const buffer = await bufferFromStream(stream);
-
-            // Guardar temporalmente y convertir a webp con sharp
-            const tmpInput = path.join(TMP_DIR, `input_${Date.now()}`);
-            const tmpWebp = path.join(TMP_DIR, `sticker_${Date.now()}.webp`);
-            fs.writeFileSync(tmpInput, buffer);
-
-            await imageToWebp(buffer, tmpWebp);
-
-            // Enviar sticker
-            const stickerBuffer = fs.readFileSync(tmpWebp);
-            await sock.sendMessage(from, { sticker: stickerBuffer }, { quoted: msg });
-
-            // limpiar
-            try { fs.unlinkSync(tmpInput); } catch {}
-            try { fs.unlinkSync(tmpWebp); } catch {}
-          } catch (e) {
-            console.error('Error creando sticker:', e);
-            await sendText(from, 'Error al crear el sticker. Asegúrate de enviar una imagen válida.', msg);
-          }
-          return;
-        }
-
-        // COMMANDS PARA GRUPOS
-        if (isGroup) {
-          // Obtener metadata del grupo
-          let metadata = null;
-          try {
-            metadata = await sock.groupMetadata(from);
-          } catch (e) {
-            // si falla, no bloqueamos todo
-            console.warn('No se pudo obtener metadata del grupo:', e);
-          }
-
-          // helper para saber si un participante es admin
-          const isAdmin = (jidToCheck) => {
-            if (!metadata || !metadata.participants) return false;
-            const p = metadata.participants.find(p => p.id === jidToCheck);
-            return !!(p && (p.admin === 'admin' || p.admin === 'superadmin'));
-          };
-
-          // !groupinfo
-          if (command === 'groupinfo') {
-            if (!metadata) {
-              await sendText(from, 'No puedo obtener información del grupo en este momento.', msg);
-              return;
-            }
-            const groupName = metadata.subject || '—';
-            const groupDesc = metadata.desc || 'Sin descripción';
-            const participants = metadata.participants?.length || 0;
-            const admins = metadata.participants?.filter(p => p.admin)?.map(p => p.id) || [];
-            const reply = [
-              `Nombre: ${groupName}`,
-              `Descripción: ${groupDesc}`,
-              `Miembros: ${participants}`,
-              `Admins: ${admins.join(', ') || 'Ninguno'}`,
-            ].join('\n');
-            await sendText(from, reply, msg);
-            return;
-          }
-
-          // !kick @user -> expulsar usuario (ejemplo)
-          if (command === 'kick') {
-            // verifica permisos: quien manda debe ser admin y el bot también
-            const botId = (sock.user && (sock.user.id || sock.user?.jid)) ? (sock.user.id || sock.user?.jid) : null;
-            if (!isAdmin(sender)) {
-              await sendText(from, 'Solo administradores del grupo pueden usar este comando.', msg);
-              return;
-            }
-            if (!isAdmin(botId)) {
-              await sendText(from, 'Necesito ser administrador del grupo para expulsar usuarios.', msg);
-              return;
-            }
-
-            // obtener menciones desde la metadata del contexto (extendedTextMessage.contextInfo.mentionedJid)
-            const ctx = getQuoted(msg);
-            const mentioned = (msg.message?.extendedTextMessage?.contextInfo?.mentionedJid) || [];
-            // alternativamente si no hay menciones, el primer arg puede ser @waid
-            if (mentioned.length === 0) {
-              await sendText(from, 'Usa: !kick @usuario (menciona al usuario a expulsar).', msg);
-              return;
-            }
-
+          await sock.sendMessage(from, { text: helpMsg }, { quoted: msg });
+        } else {
+          // Ejemplo: responder brevemente cuando te mencionen en grupos
+          if (isGroup && msg.message.extendedTextMessage && msg.message.extendedTextMessage.contextInfo && msg.message.extendedTextMessage.contextInfo.mentionedJid) {
+            const mentions = msg.message.extendedTextMessage.contextInfo.mentionedJid;
+            // Si nuestro número aparece en mentions -> responder
+            // NOTE: Para detectar correctamente tu JID podrías guardar sock.user.id.
             try {
-              // expulsar cada mencionado
-              for (const target of mentioned) {
-                await sock.groupParticipantsUpdate(from, [target], 'remove');
+              const myId = sock.user && sock.user.id ? sock.user.id : null;
+              if (myId && mentions.includes(myId)) {
+                await sock.sendMessage(from, { text: `Hola! Gracias por mencionarme.` }, { quoted: msg });
               }
-              await sendText(from, `Usuarios expulsados: ${mentioned.join(', ')}`, msg);
             } catch (e) {
-              console.error('Error al expulsar:', e);
-              await sendText(from, 'No pude expulsar al/los usuario(s). Asegúrate de que tengo permisos y que el usuario no sea admin.', msg);
+              // silenciar errores de menciones
             }
-            return;
           }
-        } // fin isGroup
-
-        // Si no coincide ningún comando
-        await sendText(from, `Comando no reconocido: ${command}\nUsa !help para ver los comandos.`, msg);
-      } catch (err) {
-        console.error('Error manejando mensaje:', err);
+        }
       }
-    }); // fin messages.upsert
+    } catch (err) {
+      logger.error('Error al procesar mensaje:', err);
+    }
+  });
 
-    sock.ev.on('error', (err) => {
-      console.error('Socket error:', err);
-    });
+  // Manejar eventos adicionales (opcional)
+  sock.ev.on('chats.update', (updates) => {
+    // ejemplo: guardar o procesar cambios en los chats
+    // logger.info('chats.update', updates);
+  });
 
-    return sock;
-  } catch (e) {
-    console.error('Error iniciando bot:', e);
-    setTimeout(() => startBot(), 2500);
-  }
+  sock.ev.on('contacts.upsert', (contacts) => {
+    // logger.info('contacts.upsert', contacts);
+  });
+
+  // Retorna la instancia por si quieres usarla desde otro módulo
+  return sock;
 }
 
-// Iniciar
-startBot();
+// Ejecutar el bot
+startBot().catch(e => {
+  console.error('Error al iniciar el bot:', e);
+  process.exit(1);
+});
