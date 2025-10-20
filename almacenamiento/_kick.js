@@ -1,4 +1,4 @@
-const { getGroupAdmins } = require('./utils'); // función para obtener admins de un grupo
+const { getGroupAdmins } = import('./utils'); // función para obtener admins de un grupo
 
 /**
  * Comando Kick para grupos de WhatsApp
