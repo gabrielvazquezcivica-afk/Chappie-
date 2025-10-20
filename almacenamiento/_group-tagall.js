@@ -1,43 +1,51 @@
 const countryFlags = {
-  '54': '🇦🇷', // Argentina
-  '55': '🇧🇷', // Brasil
-  '52': '🇲🇽', // México
-  '34': '🇪🇸', // España
-  '1': '🇺🇸', // USA/Canadá
-  '91': '🇮🇳', // India
-  // Agrega más códigos de país y banderas según necesidad
-};
-
-function getFlagByPhone(phone) {
-  const code = phone.split('@')[0].split('')[0] === '+' ? phone.split('@')[0].slice(1, phone.indexOf('9') > -1 ? phone.indexOf('9') : undefined) : phone.split('@')[0].slice(0, 2);
-  // Intentar obtener el código de país (2 o 3 dígitos)
-  let countryCode = phone.split('@')[0].slice(0, 2);
-  if (countryFlags[countryCode]) return countryFlags[countryCode];
-  countryCode = phone.split('@')[0].slice(0, 3);
-  if (countryFlags[countryCode]) return countryFlags[countryCode];
-  return '🏳️'; // bandera genérica si no se encuentra
+  'MX': '🇲🇽', // México
+  'AR': '🇦🇷', // Argentina
+  'ES': '🇪🇸', // España
+  'CO': '🇨🇴', // Colombia
+  'PE': '🇵🇪', // Perú
+  'CL': '🇨🇱', // Chile
+  'US': '🇺🇸', // USA
+  // Agrega más países según tus necesidades
 }
 
-module.exports = {
-  name: 'todos',
-  description: 'Menciona a todos los miembros con bandera de país. Solo admins si modoadmin está activo.',
-  async execute({ conn, m, isGroup, groupMetadata, participants, isAdmin, isBotAdmin, modoadmin }) {
-    if (!isGroup) {
-      return await conn.reply(m.chat, 'Este comando solo funciona en grupos.', m);
-    }
+function getFlagByCountryCode(code = 'MX') {
+  return countryFlags[code] || '🏳️';
+}
 
-    if (modoadmin && !isAdmin) {
-      return await conn.reply(m.chat, 'Solo los admins pueden usar este comando cuando el modoadmin está activo.', m);
-    }
+/**
+ * Este evento debe ser llamado cuando el bot recibe un mensaje.
+ * message: el objeto del mensaje recibido.
+ * conn: conexión baileys
+ */
+async function handleTodosCommand(message, conn) {
+  // Solo responde si el mensaje es en un grupo
+  if (!message.key.remoteJid.endsWith('@g.us')) return;
 
-    const mentions = [];
-    let message = '*Mencionando a todos los miembros del grupo:*\n\n';
-    for (const user of participants) {
-      const flag = getFlagByPhone(user.id);
-      message += `${flag} @${user.id.split('@')[0]}\n`;
-      mentions.push(user.id);
-    }
+  // Solo admins pueden usar el comando
+  const groupMetadata = await conn.groupMetadata(message.key.remoteJid);
+  const admins = groupMetadata.participants.filter(p => p.admin);
+  const isAdmin = admins.some(a => a.id === message.key.participant || a.id === message.key.fromMe);
 
-    await conn.sendMessage(m.chat, { text: message, mentions }, { quoted: m });
+  if (!isAdmin) {
+    await conn.sendMessage(message.key.remoteJid, { text: "❌ Solo los administradores pueden usar este comando." }, { quoted: message });
+    return;
   }
-};
+
+  // Mencionar a todos con bandera
+  const mentions = [];
+  let text = "👥 *Mencionando a todos:*\n\n";
+  for (const participant of groupMetadata.participants) {
+    const flag = getFlagByCountryCode(participant.countryCode); // Asegúrate de tener esta info
+    text += `${flag} @${participant.id.split('@')[0]}\n`;
+    mentions.push(participant.id);
+  }
+
+  await conn.sendMessage(message.key.remoteJid, {
+    text,
+    mentions
+  }, { quoted: message });
+}
+
+// Exporta la función para usarla en tu sistema de comandos
+module.exports = { handleTodosCommand };
