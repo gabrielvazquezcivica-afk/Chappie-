@@ -1,5 +1,4 @@
 import { join, dirname } from 'path';
-import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import { watchFile, unwatchFile, existsSync, mkdirSync } from 'fs';
 import cfonts from 'cfonts';
@@ -9,8 +8,11 @@ import chalk from 'chalk';
 import { spawn } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const require = createRequire(__dirname);
-const { name, description, author, version } = require(join(__dirname, './package.json'));
+
+// Si necesitas leer el package.json para obtener nombre, descripción, autor y versión:
+import pkg from './package.json' assert { type: 'json' };
+const { name, description, author, version } = pkg;
+
 const { say } = cfonts;
 const rl = createInterface(process.stdin, process.stdout);
 
