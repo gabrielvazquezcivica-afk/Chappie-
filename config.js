@@ -19,3 +19,9 @@ module.exports = {
     error: '❌ Ocurrió un error!',
   }
 };
+
+
+// Para agregar global.owner, puedes incluir lo siguiente:
+global.owner = [
+  ['523310167470', 'GABO', true]
+];
