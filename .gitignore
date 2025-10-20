@@ -1,24 +1,35 @@
-# Compiled class file
-*.class
+# node modules
+node_modules/
 
-# Log file
+# dotenv environment files
+.env
+
+# session files (baileys)
+session.json
+auth_info*
+auth_info_baileys*
+creds.json
+
+# logs
 *.log
 
-# BlueJ files
-*.ctxt
+# backup files
+*.bak
 
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
+# group settings
+groupSettings.json
 
-# Package Files #
-*.jar
-*.war
-*.nar
-*.ear
-*.zip
-*.tar.gz
-*.rar
+# media, cache, temp
+tmp/
+cache/
+*.tmp
+*.cache
 
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
-hs_err_pid*
-replay_pid*
+# OS files
+.DS_Store
+
+# vscode
+.vscode/
+
+# dist
+dist/
