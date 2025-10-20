@@ -1,92 +1,55 @@
-# Chappie
+# Chappie Bot 🤖
 
-<div align="center">
-  <img src="https://i.imgur.com/ChappieBotLogo.png" width="200" alt="Chappie Logo"/>
-  <h2>🤖 Chappie - Bot de WhatsApp Multi-función</h2>
-</div>
+Bot de WhatsApp multi-función usando Baileys
 
-Chappie es un bot de WhatsApp multipropósito basado en [Baileys](https://github.com/adiwajshing/Baileys), capaz de ejecutar comandos, responder a mensajes, descargar multimedia, y mucho más. Fácil de instalar y personalizar para tus necesidades.
+## Instalación
 
----
+```sh
+git clone https://github.com/gabrielvazquezcivica-afk/Chappie-.git
+cd Chappie-
+npm install
+```
 
-## 🛠️ Instalación
+## Uso
 
-### Requisitos
+- Ejecuta el bot:
+  ```sh
+  npm start
+  ```
+- Escanea el QR que aparece en la terminal para iniciar sesión.
 
-- Node.js (recomendado v18 o superior)
-- Git
-- Una cuenta de WhatsApp activa
-- [FFmpeg](https://ffmpeg.org/) (para funciones de audio/video)
+## Comandos básicos
 
-### Pasos para la instalación
+- `!ping` / `/ping` — responde Pong 🏓
+- `!echo <texto>` / `/echo <texto>` — repite el texto que envíes
+- `!help` / `/help` — muestra ayuda sobre comandos disponibles
 
-1. **Clona el repositorio:**
-   ```bash
-   git clone https://github.com/gabrielvazquezcivica-afk/Chappie-.git
-   cd Chappie-
-   ```
+## Estructura
 
-2. **Instala las dependencias:**
-   ```bash
-   npm install
-   ```
+- `index.js` — gestor principal y recargador automático
+- `main.js` — lógica del bot y conexión con WhatsApp
+- `almacenamiento/` — comandos y funciones adicionales
+- `config.js` — configuración de parámetros y mensajes
+- `package.json` — dependencias y metadatos
 
-3. **Configura el entorno:**
-   - Renombra el archivo `.env.example` a `.env` y coloca tus datos.
+## Requisitos
 
-4. **Inicia el bot:**
-   ```bash
-   npm start
-   ```
-   O usando PM2:
-   ```bash
-   pm2 start index.js
-   ```
+- Node.js 18+ recomendado
+- Termux/Ubuntu/Windows compatible
 
----
+## Dependencias principales
 
-## 🧩 Características Principales
+- [@adiwajshing/baileys](https://github.com/adiwajshing/Baileys) — conexión WhatsApp
+- `pino` — logs bonitos
+- `cfonts` — fuentes en consola
+- Otros: axios, cheerio, chalk, file-type, moment-timezone, node-fetch, qrcode-terminal
 
-- Respuesta automática a mensajes
-- Descarga de videos y música
-- Comandos de administración de grupos
-- Stickers personalizados
-- Generación de memes
-- ¡Y mucho más!
+## Notas
 
----
+- El bot guarda la sesión en `session.json`.
+- Si la sesión se cierra por logout, deberás escanear el QR nuevamente.
+- Puedes crear tus propios comandos en la carpeta `almacenamiento/`.
 
-## ⚙️ Comandos Básicos
+## Créditos
 
-- `!menu` - Muestra el menú de comandos disponibles
-- `!sticker` - Convierte una imagen o video en sticker
-- `!play <nombre>` - Descarga música de YouTube
-- `!ytmp4 <enlace>` - Descarga videos de YouTube
-- `!grupo abrir/cerrar` - Administra la configuración del grupo
-
-> **Nota:** Escribe `!menu` para ver la lista completa de comandos.
-
----
-
-## 📦 Créditos
-
-Este bot está basado en el desarrollo de [adiwajshing/Baileys](https://github.com/adiwajshing/Baileys) y otros proyectos de la comunidad de WhatsApp bots.
-
----
-
-## 📝 Licencia
-
-Este proyecto se distribuye bajo la Licencia MIT.
-
----
-
-## 💬 Contacto y Soporte
-
-¿Tienes dudas, sugerencias o encontraste un bug?  
-Crea un [Issue](https://github.com/gabrielvazquezcivica-afk/Chappie-/issues) o contacta al autor.
-
----
-
-<div align="center">
-  <b>¡Gracias por usar Chappie!</b>
-</div>
+Desarrollado por [Gabo](https://github.com/gabrielvazquezcivica-afk) y Chappie Team.
