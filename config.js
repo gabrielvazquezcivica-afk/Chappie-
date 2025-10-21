@@ -3,7 +3,7 @@ dotenv.config();
 
 export const ownerNumber = process.env.OWNER_NUMBER || '523310167470';
 export const prefix = process.env.PREFIX || '.';
-export const sessionName = process.env.SESSION_NAME || 'Itachi 🚀';
+export const sessionName = process.env.SESSION_NAME || 'Chappie 🔱';
 export const welcomeMessage = process.env.WELCOME_MESSAGE || '¡Hola! Soy Chappie 🤖';
 export const port = process.env.PORT || 3000;
 export const apiKey = process.env.API_KEY || '';
