@@ -2,9 +2,9 @@
 // Este código permite iniciar sesión usando un código de emparejamiento (pairing code) en lugar de QR.
 // Requiere que proporciones un número de teléfono válido para el bot.
 
-const { spawn } = require('child_process');
-const path = require('path');
-const fs = require('fs');
+const { spawn } = import('child_process');
+const path = import('path');
+const fs = import('fs');
 
 let child = null;
 
