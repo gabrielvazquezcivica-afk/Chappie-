@@ -1,5 +1,5 @@
 // main.js - Lógica principal del bot de WhatsApp usando Baileys
-// Este archivo maneja la conexión a WhatsApp, genera el QR code y procesa mensajes básicos.
+// Maneja conexión, QR, mensajes y comandos básicos.
 
 const {
     default: makeWASocket,
@@ -12,8 +12,8 @@ const fs = require('fs');
 const path = require('path');
 const { Boom } = require('@hapi/boom');
 
-// Función para conectar al bot
-async function connectToWhatsApp() {
+// Función principal para conectar y manejar el bot
+async function startBot() {
     // Usar estado de autenticación multi-archivo (guarda sesión en ./auth_info_baileys/)
     const { state, saveCreds } = await useMultiFileAuthState('./auth_info_baileys');
 
@@ -24,18 +24,24 @@ async function connectToWhatsApp() {
             keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
         },
         printQRInTerminal: true,  // Imprime el QR en la terminal
-        logger: pino({ level: 'silent' }),  // Logs silenciosos
-        browser: ['Chappie Bot', 'Chrome', '1.0.0']  // Nombre del bot en WhatsApp
+        logger: pino({ level: 'info' }),  // Logs para depuración
+        browser: ['Chappie Bot', 'Chrome', '1.0.0']  // Nombre del bot
     });
 
     // Manejar actualizaciones de conexión
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
 
+        console.log('Actualización de conexión:', update);  // Log para depurar
+
         if (qr) {
             // Mostrar QR code para escanear
             console.log('Escanea este QR code con WhatsApp:');
             console.log(qr);
+            // Opcional: Generar imagen QR (requiere 'qrcode' instalado)
+            // const QRCode = require('qrcode');
+            // await QRCode.toFile('./qr.png', qr);
+            // console.log('QR guardado en qr.png');
         }
 
         if (connection === 'close') {
@@ -44,9 +50,9 @@ async function connectToWhatsApp() {
 
             if (shouldReconnect) {
                 console.log('Reconectando...');
-                connectToWhatsApp();  // Reconectar automáticamente
+                startBot();  // Reconectar automáticamente
             } else {
-                console.log('Sesión cerrada. Escanea el QR nuevamente.');
+                console.log('Sesión cerrada. Borra ./auth_info_baileys/ y escanea el QR nuevamente.');
             }
         } else if (connection === 'open') {
             console.log('¡Bot conectado a WhatsApp exitosamente!');
@@ -56,14 +62,14 @@ async function connectToWhatsApp() {
     // Guardar credenciales cuando se actualicen
     sock.ev.on('creds.update', saveCreds);
 
-    // Manejar mensajes entrantes (lógica básica)
+    // Manejar mensajes entrantes
     sock.ev.on('messages.upsert', async (m) => {
         const msg = m.messages[0];
         if (!msg.key.fromMe && m.type === 'notify') {
             const from = msg.key.remoteJid;
             const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
 
-            // Comandos básicos (puedes expandir con más lógica)
+            // Comandos básicos (expande aquí o carga desde ./almacenamiento/)
             if (body.startsWith('!ping') || body.startsWith('/ping')) {
                 await sock.sendMessage(from, { text: 'Pong 🏓' });
             } else if (body.startsWith('!echo ') || body.startsWith('/echo ')) {
@@ -79,13 +85,16 @@ Comandos disponibles:
                 await sock.sendMessage(from, { text: helpText });
             }
 
-            // Aquí puedes integrar comandos adicionales desde la carpeta almacenamiento/
-            // Ejemplo: require('./almacenamiento/comando.js')(sock, msg);
+            // Ejemplo: Cargar comandos adicionales desde ./almacenamiento/
+            // const commandFiles = fs.readdirSync('./almacenamiento/').filter(file => file.endsWith('.js'));
+            // for (const file of commandFiles) {
+            //     const command = require(`./almacenamiento/${file}`);
+            //     if (command.execute) await command.execute(sock, msg);
+            // }
         }
     });
 
     return sock;
 }
 
-// Iniciar el bot
-connectToWhatsApp().catch(console.error);
+module.exports = { startBot };
