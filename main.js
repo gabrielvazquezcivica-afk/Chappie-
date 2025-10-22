@@ -1,99 +1,63 @@
-// main.js - Lógica principal del bot de WhatsApp usando Baileys (ES modules)
-// Maneja conexión, QR, mensajes y comandos básicos.
-
-import {
-    default as makeWASocket,
-    DisconnectReason,
-    useMultiFileAuthState,
-    makeCacheableSignalKeyStore
-} from '@adiwajshing/baileys';
+import { makeWASocket, DisconnectReason, useMultiFileAuthState } from '@whiskeysockets/baileys';
+import { Boom } from '@hapi/boom';
 import pino from 'pino';
 import fs from 'fs';
 import path from 'path';
-import { Boom } from '@hapi/boom';
+import chalk from 'chalk';
+import { fileURLToPath } from 'url';
 
-// Función principal para conectar y manejar el bot
-export async function startBot() {
-    // Usar estado de autenticación multi-archivo (guarda sesión en ./auth_info_baileys/)
-    import { useMultiFileAuthState } from '@whiskeysockets/baileys';
-const { state, saveCreds } = await useMultiFileAuthState('./auth_info');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-    // Crear socket de WhatsApp
+async function startBot() {
+    const { state, saveCreds } = await useMultiFileAuthState('./auth_info');
+    
     const sock = makeWASocket({
-        auth: {
-            creds: state.creds,
-            keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
-        },
-        printQRInTerminal: true,  // Imprime el QR en la terminal
-        logger: pino({ level: 'info' }),  // Logs para depuración
-        browser: ['Chappie Bot', 'Chrome', '1.0.0']  // Nombre del bot
+        auth: state,
+        printQRInTerminal: true,
+        logger: pino({ level: 'silent' }),
     });
 
-    // Manejar actualizaciones de conexión
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
 
-        console.log('Actualización de conexión:', update);  // Log para depurar
-
         if (qr) {
-            // Mostrar QR code para escanear
-            console.log('Escanea este QR code con WhatsApp:');
-            console.log(qr);
-            // Opcional: Generar imagen QR (requiere 'qrcode' instalado)
-            // import QRCode from 'qrcode';
-            // await QRCode.toFile('./qr.png', qr);
-            // console.log('QR guardado en qr.png');
+            console.log(chalk.blue('Escanea el código QR:'));
         }
 
         if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('Conexión cerrada. Razón:', lastDisconnect?.error?.output?.statusCode);
+            const shouldReconnect = (lastDisconnect?.error instanceof Boom)
+                ? lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut
+                : true;
 
             if (shouldReconnect) {
-                console.log('Reconectando...');
-                startBot();  // Reconectar automáticamente
+                console.log(chalk.yellow('Reconectando...'));
+                startBot();
             } else {
-                console.log('Sesión cerrada. Borra ./auth_info_baileys/ y escanea el QR nuevamente.');
+                console.log(chalk.red('Desconectado permanentemente.'));
             }
         } else if (connection === 'open') {
-            console.log('¡Bot conectado a WhatsApp exitosamente!');
+            console.log(chalk.green('Bot conectado exitosamente!'));
         }
     });
 
-    // Guardar credenciales cuando se actualicen
     sock.ev.on('creds.update', saveCreds);
 
-    // Manejar mensajes entrantes
     sock.ev.on('messages.upsert', async (m) => {
         const msg = m.messages[0];
         if (!msg.key.fromMe && m.type === 'notify') {
             const from = msg.key.remoteJid;
             const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
 
-            // Comandos básicos (expande aquí o carga desde ./almacenamiento/)
-            if (body.startsWith('!ping') || body.startsWith('/ping')) {
-                await sock.sendMessage(from, { text: 'Pong 🏓' });
-            } else if (body.startsWith('!echo ') || body.startsWith('/echo ')) {
-                const text = body.slice(6);
-                await sock.sendMessage(from, { text: text });
-            } else if (body.startsWith('!help') || body.startsWith('/help')) {
-                const helpText = `
-Comandos disponibles:
-- !ping / /ping: Responde Pong
-- !echo <texto> / /echo <texto>: Repite el texto
-- !help / /help: Muestra esta ayuda
-                `;
-                await sock.sendMessage(from, { text: helpText });
+            if (body.toLowerCase() === 'hola') {
+                await sock.sendMessage(from, { text: '¡Hola! Soy Chappie, ¿en qué puedo ayudarte?' });
             }
-
-            // Ejemplo: Cargar comandos adicionales desde ./almacenamiento/
-            // const commandFiles = fs.readdirSync('./almacenamiento/').filter(file => file.endsWith('.js'));
-            // for (const file of commandFiles) {
-            //     const command = await import(`./almacenamiento/${file}`);
-            //     if (command.execute) await command.execute(sock, msg);
-            // }
         }
     });
-
-    return sock;
 }
+
+startBot().catch((err) => {
+    console.error('Error al iniciar el bot:', err);
+});
+
+export default startBot;
