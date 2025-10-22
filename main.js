@@ -8,7 +8,7 @@ const {
     useMultiFileAuthState,
     makeCacheableSignalKeyStore,
     Browsers
-} = require('@adiwajshing/baileys');
+} = import('@adiwajshing/baileys');
 const { Boom } = import('@hapi/boom');
 const pino = import('pino');
 const fs = import('fs');
