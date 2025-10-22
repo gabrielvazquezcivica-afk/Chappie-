@@ -1,14 +1,14 @@
 let mutedUsers = new Set();
 
 let handler = async (m, { conn, usedPrefix, command, isAdmin, isBotAdmin }) => {
-    if (!isBotAdmin) return conn.reply(m.chat, '⭐ El bot necesita ser administrador.', m);
-    if (!isAdmin) return conn.reply(m.chat, '⭐ Solo los administradores pueden usar este comando.', m);
+    if (!isBotAdmin) return conn.reply(m.chat, '🪬 El bot necesita ser administrador.', m);
+    if (!isAdmin) return conn.reply(m.chat, ' 🪬Solo los administradores pueden usar este comando.', m);
 
     let user;
     if (m.quoted) {
         user = m.quoted.sender;
     } else {
-        return conn.reply(m.chat, '⭐ Responde al mensaje del usuario que quieres mutear.', m);
+        return conn.reply(m.chat, '🏷️ Responde al mensaje del usuario que quieres mutear.', m);
     }
 
     if (command === "mute") {
