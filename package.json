@@ -2,7 +2,7 @@
     "type": "module",
     "name": "Chappie-",
     "version": "1.0.0",
-    // ... el resto de tu package.json (no lo borres)
+
   }
   
        "description": "Bot de WhatsApp",
