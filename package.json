@@ -1,27 +1,16 @@
-{
+// {
   "name": "chappie-",
   "version": "1.0.0",
-  "description": "WhatsApp Bot using Baileys",
+  "description": "WhatsApp Bot",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
-  "keywords": [
-    "whatsapp",
-    "bot",
-    "baileys"
-  ],
-  "author": "gabrielvazquezcivica-afk",
-  "license": "ISC",
   "dependencies": {
     "@adiwajshing/baileys": "^6.7.5",
     "@hapi/boom": "^10.0.1",
     "pino": "^8.17.2",
     "node-cache": "^5.1.2",
     "yargs": "^17.7.2"
-  },
-  "devDependencies": {},
-  "engines": {
-    "node": ">=16.0.0"
   }
 }
