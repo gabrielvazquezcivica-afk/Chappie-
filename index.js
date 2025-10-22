@@ -1,53 +1,75 @@
 // index.js - Gestor principal y recargador automático para Chappie Bot
-// Este archivo maneja la inicialización del bot y la recarga automática de comandos en la carpeta 'almacenamiento/'
+// Este código permite iniciar sesión usando un código de emparejamiento (pairing code) en lugar de QR.
+// Requiere que proporciones un número de teléfono válido para el bot.
 
-const fs = import('fs');
-const path = import('path');
-const main = import('./main'); // Importa el módulo principal del bot
+const { spawn } = require('child_process');
+const path = require('path');
+const fs = require('fs');
 
-// Directorio donde se almacenan los comandos
-const commandsDir = path.join(__dirname, 'almacenamiento');
+let child = null;
 
-// Función para recargar un módulo específico (borra la caché y lo vuelve a requerir)
-function reloadModule(modulePath) {
-    try {
-        delete require.cache[require.resolve(modulePath)];
-        const reloaded = require(modulePath);
-        console.log(`Módulo recargado: ${path.basename(modulePath)}`);
-        return reloaded;
-    } catch (error) {
-        console.error(`Error al recargar ${modulePath}:`, error.message);
-        return null;
+// Función para iniciar el proceso principal (main.js)
+function startMain() {
+    if (child) {
+        child.kill();
     }
-}
-
-// Función para recargar todos los comandos en la carpeta 'almacenamiento'
-function reloadCommands() {
-    const commands = {};
-    fs.readdirSync(commandsDir).forEach(file => {
-        if (file.endsWith('.js')) {
-            const filePath = path.join(commandsDir, file);
-            const commandName = path.basename(file, '.js');
-            commands[commandName] = reloadModule(filePath);
-        }
+    child = spawn('node', [path.join(__dirname, 'main.js')], {
+        stdio: 'inherit',
+        cwd: __dirname
     });
-    // Aquí puedes actualizar el objeto global de comandos en main.js si es necesario
-    if (main.updateCommands) {
-        main.updateCommands(commands);
-    }
-    console.log('Comandos recargados automáticamente.');
+    child.on('exit', (code) => {
+        console.log(`Proceso principal terminó con código ${code}. Reiniciando...`);
+        startMain();
+    });
 }
 
-// Configura un watcher para la carpeta 'almacenamiento' para detectar cambios y recargar automáticamente
-fs.watch(commandsDir, { recursive: true }, (eventType, filename) => {
-    if (filename && filename.endsWith('.js') && (eventType === 'change' || eventType === 'rename')) {
-        console.log(`Cambio detectado en: ${filename}`);
-        reloadCommands();
-    }
+// Inicia el proceso principal al cargar
+startMain();
+
+// Manejo de señales para reinicio manual
+process.on('SIGUSR1', () => {
+    console.log('Reiniciando Chappie Bot...');
+    startMain();
 });
 
-// Inicializa los comandos al inicio
-reloadCommands();
-
-// Inicia el bot principal
-main.start().catch(console.error);
+// Nota: Para usar pairing code, modifica main.js para incluir lógica de autenticación con código.
+// Ejemplo básico en main.js (agrega esto dentro de la función de conexión):
+//
+// const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@adiwajshing/baileys');
+// 
+// async function connectToWhatsApp() {
+//     const { state, saveCreds } = await useMultiFileAuthState('./session');
+//     const sock = makeWASocket({
+//         auth: state,
+//         printQRInTerminal: false, // Desactiva QR
+//     });
+//     
+//     sock.ev.on('connection.update', async (update) => {
+//         const { connection, lastDisconnect, qr } = update;
+//         if (connection === 'close') {
+//             const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
+//             if (shouldReconnect) {
+//                 connectToWhatsApp();
+//             }
+//         } else if (connection === 'open') {
+//             console.log('Conectado a WhatsApp');
+//         }
+//     });
+//     
+//     sock.ev.on('creds.update', saveCreds);
+//     
+//     // Para pairing code: solicita el código para un número específico
+//     if (!sock.authState.creds.registered) {
+//         const phoneNumber = 'TU_NUMERO_DE_TELEFONO_AQUI'; // Reemplaza con el número del bot (ej: '1234567890')
+//         const code = await sock.requestPairingCode(phoneNumber);
+//         console.log(`Código de emparejamiento: ${code}`);
+//         // El código se envía al número de teléfono. Úsalo para emparejar en WhatsApp.
+//     }
+//     
+//     return sock;
+// }
+//
+// connectToWhatsApp();
+//
+// Recuerda instalar las dependencias con npm install y reemplazar 'TU_NUMERO_DE_TELEFONO_AQUI' con un número válido.
+// Este es un ejemplo simplificado; adapta según tu lógica existente en main.js.
