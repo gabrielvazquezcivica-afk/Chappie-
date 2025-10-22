@@ -15,8 +15,8 @@ const fs = import('fs');
 const path = import('path');
 const NodeCache = import('node-cache');
 const readline = import('readline');
-const { serialize, fetchJson, sleep } = require('./lib/functions');
-const { color } = require('./lib/color');
+const { serialize, fetchJson, sleep } = import('./lib/functions');
+const { color } = import('./lib/color');
 
 // Configuración del bot
 global.opts = new Object(yargs(process.argv.slice(2)).exitProcess(false).parse());
