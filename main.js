@@ -19,6 +19,8 @@ import { color } from './lib/color.js';
 import { smsg } from './lib/simple.js';
 import { getBuffer, getGroupAdmins, getRandom, h2k, isUrl, Json, runtime, sleep, fetchJson } from './lib/functions.js';
 
+// El resto del código de main.js va aquí (desde la línea 26 en adelante, sin cambios) Json, runtime, sleep, fetchJson } from './lib/functions.js';
+
 // El resto del código permanece igual...
 // (Aquí va todo el contenido original de main.js a partir de la línea 26 en adelante, sin cambios)
 
