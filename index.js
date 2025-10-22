@@ -1,7 +1,7 @@
 // index.js - Punto de entrada del bot Chappie- (ES modules)
 // Inicializa el bot y maneja recargas automáticas en caso de errores.
 
-import { startBot } from './main.js';
+import main from './main.js';
 
 // Función para iniciar el bot con manejo de errores y recarga
 async function init() {
