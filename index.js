@@ -1,9 +1,9 @@
 // index.js - Gestor principal y recargador automático para Chappie Bot
 // Este archivo maneja la inicialización del bot y la recarga automática de comandos en la carpeta 'almacenamiento/'
 
-const fs = require('fs');
-const path = require('path');
-const main = require('./main'); // Importa el módulo principal del bot
+const fs = import('fs');
+const path = import('path');
+const main = import('./main'); // Importa el módulo principal del bot
 
 // Directorio donde se almacenan los comandos
 const commandsDir = path.join(__dirname, 'almacenamiento');
