@@ -9,14 +9,18 @@ const {
     makeCacheableSignalKeyStore,
     Browsers
 } = import('@adiwajshing/baileys');
-const { Boom } = import('@hapi/boom');
-const pino = import('pino');
-const fs = import('fs');
-const path = import('path');
-const NodeCache = import('node-cache');
-const readline = import('readline');
-const { serialize, fetchJson, sleep } = import('./lib/functions');
-const { color } = import('./lib/color');
+import pino from 'pino';
+import fs from 'fs';
+import path from 'path';
+import { default as makeWASocket, DisconnectReason, useMultiFileAuthState } from '@whiskeysockets/baileys';
+import { Boom } from '@hapi/boom';
+import { serialize } from './lib/serialize.js';
+import { color } from './lib/color.js';
+import { smsg } from './lib/simple.js';
+import { getBuffer, getGroupAdmins, getRandom, h2k, isUrl, Json, runtime, sleep, fetchJson } from './lib/functions.js';
+
+// El resto del código permanece igual...
+// (Aquí va todo el contenido original de main.js a partir de la línea 26 en adelante, sin cambios)
 
 // Configuración del bot
 global.opts = new Object(yargs(process.argv.slice(2)).exitProcess(false).parse());
