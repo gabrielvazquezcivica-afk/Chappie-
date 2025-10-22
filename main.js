@@ -15,7 +15,8 @@ import { Boom } from '@hapi/boom';
 // Función principal para conectar y manejar el bot
 export async function startBot() {
     // Usar estado de autenticación multi-archivo (guarda sesión en ./auth_info_baileys/)
-    const { state, saveCreds } = await useMultiFileAuthState('./auth_info_baileys');
+    import { useMultiFileAuthState } from '@whiskeysockets/baileys';
+const { state, saveCreds } = await useMultiFileAuthState('./auth_info');
 
     // Crear socket de WhatsApp
     const sock = makeWASocket({
