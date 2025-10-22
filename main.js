@@ -1,19 +1,19 @@
-// main.js - Lógica principal del bot de WhatsApp usando Baileys
+// main.js - Lógica principal del bot de WhatsApp usando Baileys (ES modules)
 // Maneja conexión, QR, mensajes y comandos básicos.
 
-const {
-    default: makeWASocket,
+import {
+    default as makeWASocket,
     DisconnectReason,
     useMultiFileAuthState,
     makeCacheableSignalKeyStore
-} = require('@adiwajshing/baileys');
-const pino = require('pino');
-const fs = require('fs');
-const path = require('path');
-const { Boom } = require('@hapi/boom');
+} from '@adiwajshing/baileys';
+import pino from 'pino';
+import fs from 'fs';
+import path from 'path';
+import { Boom } from '@hapi/boom';
 
 // Función principal para conectar y manejar el bot
-async function startBot() {
+export async function startBot() {
     // Usar estado de autenticación multi-archivo (guarda sesión en ./auth_info_baileys/)
     const { state, saveCreds } = await useMultiFileAuthState('./auth_info_baileys');
 
@@ -39,7 +39,7 @@ async function startBot() {
             console.log('Escanea este QR code con WhatsApp:');
             console.log(qr);
             // Opcional: Generar imagen QR (requiere 'qrcode' instalado)
-            // const QRCode = require('qrcode');
+            // import QRCode from 'qrcode';
             // await QRCode.toFile('./qr.png', qr);
             // console.log('QR guardado en qr.png');
         }
@@ -88,7 +88,7 @@ Comandos disponibles:
             // Ejemplo: Cargar comandos adicionales desde ./almacenamiento/
             // const commandFiles = fs.readdirSync('./almacenamiento/').filter(file => file.endsWith('.js'));
             // for (const file of commandFiles) {
-            //     const command = require(`./almacenamiento/${file}`);
+            //     const command = await import(`./almacenamiento/${file}`);
             //     if (command.execute) await command.execute(sock, msg);
             // }
         }
@@ -96,5 +96,3 @@ Comandos disponibles:
 
     return sock;
 }
-
-module.exports = { startBot };
