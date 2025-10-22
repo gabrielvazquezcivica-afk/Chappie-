@@ -1,10 +1,10 @@
-     {
+     // {
+  "type": "module"
        "name": "chappie-",
        "version": "1.0.0",
        "description": "Bot de WhatsApp",
        "main": "index.js",
-       "type": "module",
-       "scripts": {
+         "scripts": {
          "start": "node index.js"
        },
        "keywords": ["whatsapp", "bot"],
