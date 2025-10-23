@@ -1,76 +1,89 @@
-import pino from 'pino';
-import fs from 'fs';
-import path from 'path';
-import makeWASocket, { DisconnectReason, useMultiFileAuthState } from '@whiskeysockets/baileys';
-import { Boom } from '@hapi/boom';
-import { serialize } from './lib/serialize.js';
-import { color } from './lib/color.js';
-import { smsg } from './lib/simple.js';
-import { getBuffer, getGroupAdmins, getRandom, h2k, isUrl, Json, runtime, sleep, fetchJson } from './lib/functions.js';
+// main.js — Chappie- actualizado con pairing code y prefijo "."
+import makeWASocket, {
+  useMultiFileAuthState,
+  fetchLatestBaileysVersion
+} from '@whiskeysockets/baileys'
+import { Boom } from '@hapi/boom'
+import pino from 'pino'
+import fs from 'fs'
 
-/**
- * main.js
- * Bot básico de WhatsApp usando @whiskeysockets/baileys
- * Inspirado en: https://github.com/gabrielvazquezcivica-afk/ITACHI-BOT-/blob/main/main.js
- *
- * Instrucciones rápidas:
- * 1) Coloca este archivo en la raíz del repo (o en la carpeta que prefieras).
- * 2) Instala dependencias:
- *    npm install @whiskeysockets/baileys pino
- * 3) Ejecuta: node index.js
- * 4) Escanea el QR que aparecerá en la terminal (si no existe session.json).
- *
- * Este ejemplo es deliberadamente simple: maneja conexión/rea-conexión,
- * guarda sesión en session.json y responde comandos básicos.
- */
+// Función para iniciar el bot
+async function startChappie() {
+  const { state, saveCreds } = await useMultiFileAuthState('./session')
+  const { version } = await fetchLatestBaileysVersion()
 
-const logger = pino({ level: 'info' });
+  const sock = makeWASocket({
+    auth: state,
+    version,
+    browser: ['Chappie-Bot', 'Chrome', '2.0.0'],
+    logger: pino({ level: 'silent' }),
+    printQRInTerminal: false
+  })
 
-// Función principal para el inicio de sesión y conexión
-async function main() {
-    // Carga el estado de autenticación (sesión guardada)
-    const { state, saveCreds } = await useMultiFileAuthState('./session');
+  sock.ev.on('creds.update', saveCreds)
 
-    // Crea el socket de WhatsApp
-    const sock = makeWASocket({
-        auth: state,
-        printQRInTerminal: true,  // Muestra el QR en la terminal para escanear
-        logger: logger,
-    });
+  sock.ev.on('connection.update', async (update) => {
+    const { connection, lastDisconnect } = update
+    const reason = new Boom(lastDisconnect?.error)?.output?.statusCode
 
-    // Maneja la actualización de credenciales (guarda la sesión)
-    sock.ev.on('creds.update', saveCreds);
+    if (connection === 'open') {
+      console.log('✅ Chappie- conectado correctamente a WhatsApp!')
+    } else if (connection === 'close') {
+      if (reason === 401 || reason === 405) {
+        console.log('⚠️ Sesión inválida. Generando nuevo código de emparejamiento...')
+        const phoneNumber = '521XXXXXXXXXX' // 👉 tu número completo (ej: 5215512345678)
+        const code = await sock.requestPairingCode(phoneNumber)
+        console.log(`📲 Ingresa este código en tu WhatsApp: ${code}`)
+      } else {
+        console.log('🔁 Reconectando...')
+        startChappie()
+      }
+    }
+  })
 
-    // Maneja la conexión
-    sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect } = update;
-        if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect?.error instanceof Boom)
-                ? lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut
-                : true;
-            console.log('Conexión cerrada debido a:', lastDisconnect?.error, ', reconectando:', shouldReconnect);
-            if (shouldReconnect) {
-                main();  // Reconecta
-            } else {
-                console.log('Sesión expirada. Borra la carpeta ./session y reescanea el QR.');
-            }
-        } else if (connection === 'open') {
-            console.log('Conectado exitosamente a WhatsApp!');
+  // Cargar plugins automáticamente
+  const pluginsDir = './plugins'
+  if (fs.existsSync(pluginsDir)) {
+    const files = fs.readdirSync(pluginsDir).filter(f => f.endsWith('.js'))
+    for (const file of files) {
+      import(`./plugins/${file}`).then(plugin => {
+        if (plugin.default) plugin.default(sock)
+        console.log(`🧩 Plugin cargado: ${file}`)
+      }).catch(err => console.log(`⚠️ Error en plugin ${file}:`, err))
+    }
+  }
+
+  // Detectar mensajes
+  sock.ev.on('messages.upsert', async ({ messages }) => {
+    const msg = messages[0]
+    if (!msg?.message) return
+    const from = msg.key.remoteJid
+    const text = msg.message.conversation || msg.message.extendedTextMessage?.text || ''
+    const prefix = '.'
+
+    if (!text.startsWith(prefix)) return
+    const command = text.slice(prefix.length).trim().split(' ')[0].toLowerCase()
+
+    switch (command) {
+      case 'ping':
+        await sock.sendMessage(from, { text: '🏓 Pong!' })
+        break
+      case 'sticker':
+        const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage
+        if (quoted?.imageMessage) {
+          const buffer = await sock.downloadMediaMessage({ message: quoted })
+          await sock.sendMessage(from, { sticker: buffer })
+        } else {
+          await sock.sendMessage(from, { text: '📸 Responde a una imagen con *.sticker* para crear un sticker.' })
         }
-    });
-
-    // Maneja mensajes entrantes (ejemplo básico)
-    sock.ev.on('messages.upsert', async (m) => {
-        const msg = m.messages[0];
-        if (!msg.key.fromMe && m.type === 'notify') {
-            console.log('Mensaje recibido:', msg.message);
-            // Aquí puedes agregar lógica para responder comandos
-        }
-    });
-
-    // Mantén el proceso vivo
-    return sock;
+        break
+      case 'menu':
+        await sock.sendMessage(from, {
+          text: `🧠 *Chappie- Bot*\n\nComandos disponibles:\n.ping\n.sticker\n.menu\n\nPrefijo actual: "."`
+        })
+        break
+    }
+  })
 }
 
-// Ejecuta la función principal
-main().catch((err) => console.error('Error en main:', err));
+startChappie()
