@@ -1,3 +1,22 @@
-  import { useMultiFileAuthState } from '@whiskeysockets/baileys';
-  console.log('Baileys funciona');
-  
+import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys'
+import { Boom } from '@hapi/boom'
+
+async function start() {
+  const { state, saveCreds } = await useMultiFileAuthState('./test-session')
+  const sock = makeWASocket({
+    printQRInTerminal: true,
+    auth: state
+  })
+  sock.ev.on('creds.update', saveCreds)
+  sock.ev.on('connection.update', (update) => {
+    const { connection, lastDisconnect } = update
+    console.log('update connection:', update)
+    if (connection === 'open') {
+      console.log('✅ Conectado correctamente')
+    } else if (connection === 'close') {
+      const reason = new Boom(lastDisconnect.error).output.statusCode
+      console.log('❌ Conexión cerrada, razón:', reason)
+    }
+  })
+}
+start()
