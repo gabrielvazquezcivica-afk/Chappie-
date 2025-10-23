@@ -5,14 +5,14 @@ import qrcode from 'qrcode-terminal'
 import fs from 'fs'
 import path from 'path'
 
-// Función recursiva para leer todos los archivos JS en carpetas
+// Función recursiva para leer todos los comandos en carpetas
 async function cargarComandosRecursivo(dir, comandos) {
   const items = fs.readdirSync(dir, { withFileTypes: true })
 
   for (const item of items) {
     const itemPath = path.join(dir, item.name)
     if (item.isDirectory()) {
-      await cargarComandosRecursivo(itemPath, comandos) // recursivo
+      await cargarComandosRecursivo(itemPath, comandos)
     } else if (item.isFile() && item.name.endsWith('.js') && item.name !== 'main.js' && item.name !== 'index.js') {
       try {
         const cmdModule = await import(itemPath)
@@ -20,8 +20,6 @@ async function cargarComandosRecursivo(dir, comandos) {
         if (cmd?.nombre && cmd?.ejecutar) {
           comandos.set(cmd.nombre.toLowerCase(), cmd)
           console.log(`🔹 Comando cargado: ${cmd.nombre} desde ${itemPath}`)
-        } else {
-          console.log(`⚠️ Archivo ${itemPath} no tiene comando válido`)
         }
       } catch (e) {
         console.log(`❌ Error cargando ${itemPath}:`, e)
@@ -30,15 +28,14 @@ async function cargarComandosRecursivo(dir, comandos) {
   }
 }
 
-export async function startChappie(modo, numero = 'N/A') {
+export async function startChappie() {
   console.clear()
-  console.log('⚙️ Iniciando Chappie-Bot...')
-  console.log(`📞 Número de referencia: ${numero}`)
+  console.log('⚙️ Iniciando Chappie-Bot para grupos de WhatsApp...')
 
   // ----------------------------
-  // CARGAR TODOS LOS COMANDOS RECURSIVAMENTE
+  // CARGAR COMANDOS
   // ----------------------------
-  const repoPath = path.resolve('./') // raíz del repositorio
+  const repoPath = path.resolve('./')
   const comandos = new Map()
   await cargarComandosRecursivo(repoPath, comandos)
   console.log(`✅ Total de comandos cargados: ${comandos.size}`)
@@ -61,23 +58,23 @@ export async function startChappie(modo, numero = 'N/A') {
 
     if (qr) {
       console.log('📲 Escanea este QR con WhatsApp:')
-      qrcode.generate(qr, { small: true }) // QR compacto
+      qrcode.generate(qr, { small: true })
     }
 
     if (connection === 'connecting') console.log('🔌 Conectando a WhatsApp...')
-    else if (connection === 'open') console.log('✅ Conectado correctamente a WhatsApp')
+    else if (connection === 'open') console.log('✅ Conectado a WhatsApp')
     else if (connection === 'close') {
       const reason = new Boom(lastDisconnect?.error)?.output?.statusCode
       console.log(`❌ Conexión cerrada (razón: ${reason})`)
       if (reason !== DisconnectReason.loggedOut) {
         console.log('♻️ Reconectando...')
-        startChappie(modo, numero)
+        startChappie()
       }
     }
   })
 
   // ----------------------------
-  // EJECUTAR COMANDOS
+  // ESCUCHAR MENSAJES
   // ----------------------------
   sock.ev.on('messages.upsert', async (msg) => {
     const mensaje = msg.messages[0]
