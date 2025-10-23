@@ -39,7 +39,7 @@ export default async function startBot(options = { mode: 'qr' }) {
 
     if (options.mode === 'code' && connection === 'connecting') {
       console.log('🔑 Generando código de emparejamiento...')
-      const number = '521XXXXXXXXXX' // ← tu número con código de país (ej. México)
+      const number = '18549995761' // ← tu número con código de país (ej. México)
       const code = await sock.requestPairingCode(number)
       console.log(`📲 Ingresa este código en WhatsApp: ${code}`)
     }
