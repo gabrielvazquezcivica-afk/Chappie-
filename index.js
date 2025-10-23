@@ -17,15 +17,19 @@ const rl = readline.createInterface({
 })
 
 rl.question('Introduce 1 o 2: ', async (opcion) => {
-  rl.close()
   if (opcion === '1') {
     console.log('📱 Modo QR seleccionado')
+    rl.close()
     await startChappie('qr')
   } else if (opcion === '2') {
-    console.log('🔑 Modo CODEBOT seleccionado')
-    await startChappie('code')
+    rl.question('📞 Ingresa tu número (ejemplo: 5215512345678): ', async (numero) => {
+      rl.close()
+      console.log(`🔑 Modo CODEBOT seleccionado para el número: ${numero}`)
+      await startChappie('code', numero)
+    })
   } else {
     console.log('❌ Opción inválida, usa 1 o 2')
+    rl.close()
     process.exit(1)
   }
 })
