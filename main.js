@@ -1,48 +1,57 @@
 import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys'
 import pino from 'pino'
-import { Boom } from '@hapi/boom'
 import qrcode from 'qrcode-terminal'
+import { Boom } from '@hapi/boom'
 import fs from 'fs'
 import path from 'path'
 
-// Función recursiva para leer todos los comandos en carpetas
-async function cargarComandosRecursivo(dir, comandos) {
-  const items = fs.readdirSync(dir, { withFileTypes: true })
+// ----------------------------
+// Función para cargar plugins automáticamente
+// ----------------------------
+async function cargarPlugins() {
+  const comandos = new Map()
+  const pluginsDir = path.join('./', 'plugins')
 
-  for (const item of items) {
-    const itemPath = path.join(dir, item.name)
-    if (item.isDirectory()) {
-      await cargarComandosRecursivo(itemPath, comandos)
-    } else if (item.isFile() && item.name.endsWith('.js') && item.name !== 'main.js' && item.name !== 'index.js') {
+  if (!fs.existsSync(pluginsDir)) {
+    console.log('⚠️ Carpeta plugins no encontrada.')
+    return comandos
+  }
+
+  const archivos = fs.readdirSync(pluginsDir)
+
+  for (const archivo of archivos) {
+    const rutaArchivo = path.join(pluginsDir, archivo)
+    if (fs.statSync(rutaArchivo).isFile() && archivo.endsWith('.js')) {
       try {
-        const cmdModule = await import(itemPath)
-        const cmd = cmdModule.default
+        const modulo = await import(path.resolve(rutaArchivo))
+        const cmd = modulo.default
         if (cmd?.nombre && cmd?.ejecutar) {
           comandos.set(cmd.nombre.toLowerCase(), cmd)
-          console.log(`🔹 Comando cargado: ${cmd.nombre} desde ${itemPath}`)
+          console.log(`✅ Plugin cargado: ${cmd.nombre}`)
+        } else {
+          console.log(`⚠️ Plugin ${archivo} no tiene 'nombre' o 'ejecutar', se omite.`)
         }
       } catch (e) {
-        console.log(`❌ Error cargando ${itemPath}:`, e)
+        console.log(`❌ Error cargando plugin ${archivo}:`, e.message)
       }
     }
   }
+
+  console.log(`📂 Total de plugins cargados: ${comandos.size}`)
+  return comandos
 }
 
+// ----------------------------
+// Función principal del bot
+// ----------------------------
 export async function startChappie() {
   console.clear()
-  console.log('⚙️ Iniciando Chappie-Bot para grupos de WhatsApp...')
+  console.log('⚙️ Iniciando Chappie-Bot (sin comandos internos)...')
 
-  // ----------------------------
-  // CARGAR COMANDOS
-  // ----------------------------
-  const repoPath = path.resolve('./')
-  const comandos = new Map()
-  await cargarComandosRecursivo(repoPath, comandos)
-  console.log(`✅ Total de comandos cargados: ${comandos.size}`)
+  // Cargar plugins
+  const comandos = await cargarPlugins()
 
-  // ----------------------------
-  // CONEXIÓN WHATSAPP
-  // ----------------------------
+  // Conexión WhatsApp
   const { state, saveCreds } = await useMultiFileAuthState('./ChappieSession')
   const sock = makeWASocket({
     auth: state,
@@ -66,16 +75,11 @@ export async function startChappie() {
     else if (connection === 'close') {
       const reason = new Boom(lastDisconnect?.error)?.output?.statusCode
       console.log(`❌ Conexión cerrada (razón: ${reason})`)
-      if (reason !== DisconnectReason.loggedOut) {
-        console.log('♻️ Reconectando...')
-        startChappie()
-      }
+      if (reason !== DisconnectReason.loggedOut) startChappie()
     }
   })
 
-  // ----------------------------
-  // ESCUCHAR MENSAJES
-  // ----------------------------
+  // Escuchar mensajes y ejecutar plugins
   sock.ev.on('messages.upsert', async (msg) => {
     const mensaje = msg.messages[0]
     if (!mensaje.message || mensaje.key.fromMe) return
@@ -90,15 +94,14 @@ export async function startChappie() {
     const cmd = comandos.get(nombreComando)
 
     if (cmd) {
-      console.log(`⚡ Ejecutando comando: ${cmd.nombre} desde ${sender}`)
+      console.log(`⚡ Ejecutando plugin: ${cmd.nombre} desde ${sender}`)
       try {
         await cmd.ejecutar(sock, sender, mensaje)
       } catch (e) {
-        console.log(`❌ Error ejecutando comando ${nombreComando}:`, e)
+        console.log(`❌ Error ejecutando plugin ${nombreComando}:`, e)
       }
     } else {
-      console.log(`❌ Comando no reconocido: ${nombreComando}`)
-      await sock.sendMessage(sender, { text: '❌ Comando no reconocido.' })
+      console.log(`❌ Comando/plugin no reconocido: ${nombreComando}`)
     }
   })
 }
