@@ -6,32 +6,45 @@ import fs from 'fs'
 import path from 'path'
 
 export async function startChappie(modo, numero = 'N/A') {
+  console.clear()
   console.log('⚙️ Iniciando Chappie-Bot...')
   console.log(`📞 Número de referencia: ${numero}`)
 
-  // Leer comandos existentes del repositorio
-  const comandosPath = path.join('./commands')
+  // ----------------------------
+  // CARGAR COMANDOS DE "almacenamiento"
+  // ----------------------------
+  const storagePath = path.join('./almacenamiento')  // Carpeta exacta del repositorio
   const comandos = new Map()
 
-  if (fs.existsSync(comandosPath)) {
-    const archivos = fs.readdirSync(comandosPath).filter(f => f.endsWith('.js'))
+  if (fs.existsSync(storagePath)) {
+    const archivos = fs.readdirSync(storagePath).filter(f => f.endsWith('.js'))
+    console.log(`📂 Se encontraron ${archivos.length} archivos en almacenamiento`)
+
     for (const archivo of archivos) {
-      const comandoModule = await import(`./commands/${archivo}`)
-      const cmd = comandoModule.default
-      if (cmd?.nombre && cmd?.ejecutar) {
-        comandos.set(cmd.nombre.toLowerCase(), cmd)
-        console.log(`🔹 Comando cargado: ${cmd.nombre}`)
+      try {
+        const cmdModule = await import(`./almacenamiento/${archivo}`)
+        const cmd = cmdModule.default
+        if (cmd?.nombre && cmd?.ejecutar) {
+          comandos.set(cmd.nombre.toLowerCase(), cmd)
+          console.log(`🔹 Comando cargado: ${cmd.nombre}`)
+        } else {
+          console.log(`⚠️ Archivo ${archivo} no tiene comando válido.`)
+        }
+      } catch (e) {
+        console.log(`❌ Error cargando ${archivo}:`, e)
       }
     }
   } else {
-    console.log('⚠️ Carpeta commands/ no encontrada. No se cargarán comandos.')
+    console.log('⚠️ Carpeta de almacenamiento no encontrada.')
   }
 
-  // Conexión WhatsApp
+  // ----------------------------
+  // CONEXIÓN WHATSAPP
+  // ----------------------------
   const { state, saveCreds } = await useMultiFileAuthState('./ChappieSession')
   const sock = makeWASocket({
     auth: state,
-    printQRInTerminal: false, // lo mostraremos con qrcode-terminal
+    printQRInTerminal: false,
     logger: pino({ level: 'silent' }),
     browser: ['Ubuntu', 'Chrome', '22.04.4']
   })
@@ -43,7 +56,7 @@ export async function startChappie(modo, numero = 'N/A') {
 
     if (qr) {
       console.log('📲 Escanea este QR con WhatsApp:')
-      qrcode.generate(qr, { small: true }) // QR legible en Termux
+      qrcode.generate(qr, { small: true }) // QR compacto
     }
 
     if (connection === 'connecting') console.log('🔌 Conectando a WhatsApp...')
@@ -58,7 +71,9 @@ export async function startChappie(modo, numero = 'N/A') {
     }
   })
 
-  // Ejecutar comandos existentes
+  // ----------------------------
+  // EJECUTAR COMANDOS
+  // ----------------------------
   sock.ev.on('messages.upsert', async (msg) => {
     const mensaje = msg.messages[0]
     if (!mensaje.message || mensaje.key.fromMe) return
@@ -71,13 +86,16 @@ export async function startChappie(modo, numero = 'N/A') {
 
     const nombreComando = texto.slice(prefijo.length).split(' ')[0].toLowerCase()
     const cmd = comandos.get(nombreComando)
+
     if (cmd) {
+      console.log(`⚡ Ejecutando comando: ${cmd.nombre} desde ${sender}`)
       try {
         await cmd.ejecutar(sock, sender, mensaje)
       } catch (e) {
         console.log(`❌ Error ejecutando comando ${nombreComando}:`, e)
       }
     } else {
+      console.log(`❌ Comando no reconocido: ${nombreComando}`)
       await sock.sendMessage(sender, { text: '❌ Comando no reconocido.' })
     }
   })
