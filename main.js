@@ -26,7 +26,7 @@ export default async function startChappie() {
     else if (connection === 'close') {
       if (reason === 401 || reason === 405) {
         console.log('⚠️ Sesión inválida, generando código de emparejamiento...')
-        const phoneNumber = '521XXXXXXXXXX' // <- tu número
+        const phoneNumber = '521XXXXXXXXXX' // <- tu número con código de país
         const code = await sock.requestPairingCode(phoneNumber)
         console.log(`📲 Ingresa este código en WhatsApp: ${code}`)
       } else {
@@ -58,7 +58,7 @@ export default async function startChappie() {
 
     switch (command) {
       case 'ping': await sock.sendMessage(from, { text: '🏓 Pong!' }); break
-      case 'menu': await sock.sendMessage(from, { text: '🧠 Comandos disponibles:\n.ping\n.menu\n.sticker' }); break
+      case 'menu': await sock.sendMessage(from, { text: '🧠 Comandos disponibles:\n.ping\n.menu\n.sticker\n.hola\n.adios' }); break
     }
   })
 
