@@ -12,12 +12,14 @@ const {
 import pino from 'pino';
 import fs from 'fs';
 import path from 'path';
-import { default as makeWASocket, DisconnectReason, useMultiFileAuthState } from '@whiskeysockets/baileys';
+import makeWASocket, { DisconnectReason, useMultiFileAuthState } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import { serialize } from './lib/serialize.js';
 import { color } from './lib/color.js';
 import { smsg } from './lib/simple.js';
 import { getBuffer, getGroupAdmins, getRandom, h2k, isUrl, Json, runtime, sleep, fetchJson } from './lib/functions.js';
+
+// El resto del código de main.js va aquí (desde la línea 26 en adelante, sin cambios), Json, runtime, sleep, fetchJson } from './lib/functions.js';
 
 // El resto del código de main.js va aquí (desde la línea 26 en adelante, sin cambios) Json, runtime, sleep, fetchJson } from './lib/functions.js';
 
