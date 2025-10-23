@@ -1,54 +1,35 @@
-// Estado de bienvenida por grupo
-const estadoWelcome = new Map()
+// Estado de funciones por grupo
+const estadoFunciones = new Map()
 
 export default {
-  nombre: 'welcome',
+  nombre: 'enable',
   ejecutar: async (sock, sender, mensaje) => {
     const grupo = mensaje.key.remoteJid
-
-    // Activar o desactivar la bienvenida
     const texto = mensaje.message?.conversation || mensaje.message?.extendedTextMessage?.text || ''
-    if (texto.toLowerCase().includes('on')) {
-      estadoWelcome.set(grupo, true)
-      await sock.sendMessage(grupo, { text: '✅ Bienvenida activada para este grupo.' })
-    } else if (texto.toLowerCase().includes('off')) {
-      estadoWelcome.set(grupo, false)
-      await sock.sendMessage(grupo, { text: '❌ Bienvenida desactivada para este grupo.' })
-    } else {
-      await sock.sendMessage(grupo, { text: 'Escribe ".welcome on" para activar o ".welcome off" para desactivar la bienvenida.' })
+    const args = texto.split(' ').slice(1) // lo que viene después de .enable
+
+    if (args.length === 0) {
+      return await sock.sendMessage(grupo, {
+        text: '❌ Usa: .enable <funcion>\nEjemplo: .enable welcome'
+      })
     }
+
+    const funcion = args[0].toLowerCase()
+
+    // Activar la función
+    if (!estadoFunciones.has(grupo)) estadoFunciones.set(grupo, {})
+    const grupoFuncs = estadoFunciones.get(grupo)
+    grupoFuncs[funcion] = true
+    estadoFunciones.set(grupo, grupoFuncs)
+
+    await sock.sendMessage(grupo, {
+      text: `✅ Función "${funcion}" activada para este grupo.`
+    })
   },
 
-  // Función para usar en group-participants.update
-  welcomeListener: async (sock, update) => {
-    if (update.action !== 'add') return
-
-    const grupo = update.jid || update.id || update.remoteJid
-    if (!estadoWelcome.get(grupo)) return // Solo si la bienvenida está activa
-
-    for (const userId of update.participants) {
-      try {
-        let fotoUrl
-        try {
-          fotoUrl = await sock.profilePictureUrl(userId, 'image')
-        } catch {
-          fotoUrl = null
-        }
-
-        const nombre = userId.split('@')[0]
-        const mensajeBienvenida = `👋 Bienvenido al grupo, ${nombre}!`
-
-        if (fotoUrl) {
-          await sock.sendMessage(grupo, {
-            image: { url: fotoUrl },
-            caption: mensajeBienvenida
-          })
-        } else {
-          await sock.sendMessage(grupo, { text: mensajeBienvenida })
-        }
-      } catch (e) {
-        console.log(`❌ Error enviando bienvenida a ${userId}:`, e.message)
-      }
-    }
+  // Función para consultar si una función está habilitada
+  isEnabled: (grupo, funcion) => {
+    const grupoFuncs = estadoFunciones.get(grupo)
+    return grupoFuncs?.[funcion] || false
   }
 }
