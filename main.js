@@ -1,111 +1,60 @@
-// main.js — Control de conexión y comandos del bot
-
-import makeWASocket, { useMultiFileAuthState, fetchLatestBaileysVersion, DisconnectReason } from '@whiskeysockets/baileys'
-import { Boom } from '@hapi/boom'
-import fs from 'fs'
+import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys'
 import pino from 'pino'
-import qrcode from 'qrcode-terminal'
+import { Boom } from '@hapi/boom'
 
-// ===============================
-// INICIO DEL BOT
-// ===============================
-export default async function startBot(options = { mode: 'qr' }) {
-  const { state, saveCreds } = await useMultiFileAuthState('./session')
-  const { version } = await fetchLatestBaileysVersion()
-
+export async function startChappie(modo, numero) {
+  const { state, saveCreds } = await useMultiFileAuthState('./ChappieSession')
   const sock = makeWASocket({
     auth: state,
-    version,
+    printQRInTerminal: modo === 'qr',
     logger: pino({ level: 'silent' }),
-    printQRInTerminal: false,
-    browser: ['Chappie-Bot', 'Chrome', '2.0.0']
+    browser: ['Ubuntu', 'Chrome', '22.04.4']
   })
 
   sock.ev.on('creds.update', saveCreds)
 
-  // ===============================
-  // CONEXIÓN Y MODO DE EMPAREJAMIENTO
-  // ===============================
   sock.ev.on('connection.update', async (update) => {
-    const { connection, lastDisconnect, qr } = update
-    const reason = new Boom(lastDisconnect?.error)?.output?.statusCode
-
-    if (connection === 'open') console.log('✅ Chappie-Bot conectado exitosamente!')
-
-    if (options.mode === 'qr' && qr) {
-      console.log('📸 Escanea este código QR con WhatsApp:')
-      qrcode.generate(qr, { small: true })
-    }
-
-    if (options.mode === 'code' && connection === 'connecting') {
-      console.log('🔑 Generando código de emparejamiento...')
-      const number = '18549995761' // ← tu número con código de país (ej. México)
-      const code = await sock.requestPairingCode(number)
-      console.log(`📲 Ingresa este código en WhatsApp: ${code}`)
-    }
+    const { connection, lastDisconnect } = update
 
     if (connection === 'close') {
-      if (reason === DisconnectReason.loggedOut) {
-        console.log('⚠️ Sesión cerrada, elimina la carpeta /session y reconecta.')
-      } else {
-        console.log('🔁 Reconectando...')
-        startBot(options)
+      const reason = new Boom(lastDisconnect?.error)?.output?.statusCode
+      console.log(`❌ Conexión cerrada, razón: ${reason}`)
+      if (reason !== DisconnectReason.loggedOut) {
+        console.log('♻️  Reconectando...')
+        startChappie(modo, numero)
       }
+    } else if (connection === 'open') {
+      console.log('✅ Conectado correctamente a WhatsApp')
+    } else if (connection === 'connecting') {
+      console.log('🔌 Conectando...')
     }
   })
 
-  // ===============================
-  // CARGAR PLUGINS (./plugins)
-  // ===============================
-  const pluginsDir = './plugins'
-  if (fs.existsSync(pluginsDir)) {
-    const files = fs.readdirSync(pluginsDir).filter(f => f.endsWith('.js'))
-    for (const file of files) {
-      try {
-        const plugin = await import(`./plugins/${file}`)
-        if (plugin.default) plugin.default(sock)
-      } catch (err) {
-        console.error(`❌ Error cargando plugin ${file}:`, err)
-      }
+  if (modo === 'code') {
+    console.log('🔑 Generando código de emparejamiento...')
+    await new Promise(resolve => setTimeout(resolve, 3000))
+    try {
+      const code = await sock.requestPairingCode(numero)
+      console.log(`✅ Código de emparejamiento para ${numero}: ${code}`)
+    } catch (err) {
+      console.error('❌ Error al generar el código:', err.message)
     }
   }
 
-  // ===============================
-  // COMANDOS BÁSICOS
-  // ===============================
-  sock.ev.on('messages.upsert', async ({ messages }) => {
-    const msg = messages[0]
-    if (!msg?.message) return
+  // 🧠 Ejemplo de comandos básicos
+  sock.ev.on('messages.upsert', async (msg) => {
+    const mensaje = msg.messages[0]
+    if (!mensaje.message || mensaje.key.fromMe) return
+    const texto = mensaje.message.conversation || mensaje.message.extendedTextMessage?.text || ''
+    const sender = mensaje.key.remoteJid
 
-    const from = msg.key.remoteJid
-    const text = msg.message.conversation || msg.message.extendedTextMessage?.text || ''
-    const prefix = '.'
-    if (!text.startsWith(prefix)) return
-
-    const command = text.slice(prefix.length).trim().split(' ')[0].toLowerCase()
-
-    switch (command) {
-      case 'ping':
-        await sock.sendMessage(from, { text: '🏓 Pong! El bot está activo.' })
-        break
-
-      case 'menu':
-        await sock.sendMessage(from, { text: '🧠 Comandos disponibles:\n.ping\n.menu\n.sticker\n.hola\n.adios' })
-        break
-
-      default:
-        await sock.sendMessage(from, { text: `❓ Comando desconocido: ${command}` })
+    if (texto.startsWith('.hola')) {
+      await sock.sendMessage(sender, { text: '👋 ¡Hola! Soy Chappie-Bot.' })
     }
-  })
 
-  // ===============================
-  // BIENVENIDAS Y DESPEDIDAS EN GRUPOS
-  // ===============================
-  sock.ev.on('group-participants.update', async ({ id, participants, action }) => {
-    for (const p of participants) {
-      const name = p.split('@')[0]
-      const msg = action === 'add' ? `🎉 ¡Bienvenido @${name}!` : `👋 ¡Adiós @${name}!`
-      await sock.sendMessage(id, { text: msg, mentions: [p] })
+    if (texto.startsWith('.sticker') && mensaje.message.imageMessage) {
+      const buffer = await sock.downloadMediaMessage(mensaje)
+      await sock.sendMessage(sender, { sticker: buffer })
     }
   })
 }
