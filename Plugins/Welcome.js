@@ -1,51 +1,54 @@
+// Estado de bienvenida por grupo
+const estadoWelcome = new Map()
+
 export default {
   nombre: 'welcome',
   ejecutar: async (sock, sender, mensaje) => {
-    try {
-      const grupo = mensaje.key.remoteJid
+    const grupo = mensaje.key.remoteJid
 
-      // Obtener metadata del grupo
-      const grupoInfo = await sock.groupMetadata(grupo)
-      const participantes = grupoInfo.participants
+    // Activar o desactivar la bienvenida
+    const texto = mensaje.message?.conversation || mensaje.message?.extendedTextMessage?.text || ''
+    if (texto.toLowerCase().includes('on')) {
+      estadoWelcome.set(grupo, true)
+      await sock.sendMessage(grupo, { text: '✅ Bienvenida activada para este grupo.' })
+    } else if (texto.toLowerCase().includes('off')) {
+      estadoWelcome.set(grupo, false)
+      await sock.sendMessage(grupo, { text: '❌ Bienvenida desactivada para este grupo.' })
+    } else {
+      await sock.sendMessage(grupo, { text: 'Escribe ".welcome on" para activar o ".welcome off" para desactivar la bienvenida.' })
+    }
+  },
 
-      // Detectar usuarios nuevos
-      const nuevos = participantes.filter(p => p.id === mensaje.key.participant)
+  // Función para usar en group-participants.update
+  welcomeListener: async (sock, update) => {
+    if (update.action !== 'add') return
 
-      if (nuevos.length === 0) return
+    const grupo = update.jid || update.id || update.remoteJid
+    if (!estadoWelcome.get(grupo)) return // Solo si la bienvenida está activa
 
-      for (const user of nuevos) {
+    for (const userId of update.participants) {
+      try {
+        let fotoUrl
         try {
-          // Obtener foto de perfil del usuario
-          let fotoUrl
-          try {
-            fotoUrl = await sock.profilePictureUrl(user.id, 'image')
-          } catch {
-            fotoUrl = null
-          }
-
-          const nombre = user.notify || user.id.split('@')[0]
-
-          // Enviar mensaje de bienvenida
-          const mensajeBienvenida = {
-            text: `👋 Bienvenido al grupo, ${nombre}!`,
-          }
-
-          if (fotoUrl) {
-            // Enviar foto con mensaje
-            await sock.sendMessage(grupo, {
-              image: { url: fotoUrl },
-              caption: mensajeBienvenida.text
-            })
-          } else {
-            // Solo texto si no hay foto
-            await sock.sendMessage(grupo, mensajeBienvenida)
-          }
-        } catch (e) {
-          console.log(`❌ Error enviando bienvenida a ${user.id}:`, e.message)
+          fotoUrl = await sock.profilePictureUrl(userId, 'image')
+        } catch {
+          fotoUrl = null
         }
+
+        const nombre = userId.split('@')[0]
+        const mensajeBienvenida = `👋 Bienvenido al grupo, ${nombre}!`
+
+        if (fotoUrl) {
+          await sock.sendMessage(grupo, {
+            image: { url: fotoUrl },
+            caption: mensajeBienvenida
+          })
+        } else {
+          await sock.sendMessage(grupo, { text: mensajeBienvenida })
+        }
+      } catch (e) {
+        console.log(`❌ Error enviando bienvenida a ${userId}:`, e.message)
       }
-    } catch (err) {
-      console.log('❌ Error en plugin welcome:', err.message)
     }
   }
 }
