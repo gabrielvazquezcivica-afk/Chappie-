@@ -1,31 +1,32 @@
 #!/usr/bin/env node
+// index.js — Punto de entrada del bot
+
 import readline from 'readline'
-import startChappie from './main.js'
+import startBot from './main.js'  // Asegúrate de que main.js exporte `default`
 
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout
 })
 
-console.log('🚀 Bienvenido a Chappie- Bot')
-console.log('Elige la opción de conexión:')
-console.log('1 - Escanear QR')
-console.log('2 - Usar CodeBot (pairing code)')
-
-rl.question('Selecciona 1 o 2: ', async (answer) => {
+console.log('===============================')
+console.log('⚙️  Iniciando Chappie-Bot')
+console.log('===============================')
+console.log('Selecciona modo de conexión:')
+console.log('1) Escanear QR')
+console.log('2) Emparejamiento por código')
+rl.question('Introduce 1 o 2: ', async (respuesta) => {
   rl.close()
-
-  switch(answer.trim()) {
-    case '1':
-      console.log('📲 Opción QR seleccionada')
-      await startChappie({ useQRCode: true })
-      break
-    case '2':
-      console.log('🔑 Opción CodeBot seleccionada')
-      await startChappie({ useQRCode: false })
-      break
-    default:
-      console.log('❌ Opción inválida. Reinicia el bot e intenta de nuevo.')
-      process.exit(0)
+  const opcion = respuesta.trim()
+  
+  if (opcion === '1') {
+    console.log('📲 Opción 1 seleccionada: Escaneo de QR')
+    await startBot({ mode: 'qr' })
+  } else if (opcion === '2') {
+    console.log('🔑 Opción 2 seleccionada: Emparejamiento por código')
+    await startBot({ mode: 'code' })
+  } else {
+    console.log('❌ Opción inválida. El bot se cerrará.')
+    process.exit(0)
   }
 })
