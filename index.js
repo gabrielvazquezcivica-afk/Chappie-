@@ -8,7 +8,7 @@ console.log(`
 ===============================
 Selecciona modo de conexión:
 1) Escanear QR
-2) Emparejamiento por código (solo referencia, no genera código)
+2) Mostrar número (solo referencia) y usar QR
 `)
 
 const rl = readline.createInterface({
@@ -18,18 +18,17 @@ const rl = readline.createInterface({
 
 rl.question('Introduce 1 o 2: ', async (opcion) => {
   if (opcion === '1') {
-    console.log('📱 Modo QR seleccionado')
     rl.close()
     await startChappie('qr')
   } else if (opcion === '2') {
-    rl.question('📞 Ingresa tu número (solo referencia): ', async (numero) => {
+    rl.question('📞 Ingresa tu número: ', async (numero) => {
       rl.close()
-      console.log(`🔑 Número registrado para logs: ${numero}`)
-      console.log('⚠️ Usando QR de todos modos para evitar error 405')
+      console.log(`🔑 Número registrado: ${numero}`)
+      console.log('⚠️ Se usará QR para emparejar y evitar error 405')
       await startChappie('qr', numero)
     })
   } else {
-    console.log('❌ Opción inválida, usa 1 o 2')
+    console.log('❌ Opción inválida')
     rl.close()
     process.exit(1)
   }
