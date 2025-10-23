@@ -8,7 +8,7 @@ console.log(`
 ===============================
 Selecciona modo de conexión:
 1) Escanear QR
-2) Mostrar número (solo referencia) y usar QR
+2) Emparejamiento por número (solo referencia)
 `)
 
 const rl = readline.createInterface({
