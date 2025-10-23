@@ -1,14 +1,3 @@
-// main.js - Lógica principal del bot Chappie con soporte para pairing code
-// Basado en el archivo original del repositorio: https://github.com/gabrielvazquezcivica-afk/Chappie-/blob/main/main.js
-// Modificado para incluir autenticación con código de emparejamiento (pairing code) en lugar de QR.
-
-const {
-    default: makeWASocket,
-    DisconnectReason,
-    useMultiFileAuthState,
-    makeCacheableSignalKeyStore,
-    Browsers
-} = import('@adiwajshing/baileys');
 import pino from 'pino';
 import fs from 'fs';
 import path from 'path';
@@ -18,6 +7,22 @@ import { serialize } from './lib/serialize.js';
 import { color } from './lib/color.js';
 import { smsg } from './lib/simple.js';
 import { getBuffer, getGroupAdmins, getRandom, h2k, isUrl, Json, runtime, sleep, fetchJson } from './lib/functions.js';
+
+/**
+ * main.js
+ * Bot básico de WhatsApp usando @adiwajshing/baileys
+ * Inspirado en: https://github.com/gabrielvazquezcivica-afk/ITACHI-BOT-/blob/main/main.js
+ *
+ * Instrucciones rápidas:
+ * 1) Coloca este archivo en la raíz del repo (o en la carpeta que prefieras).
+ * 2) Instala dependencias:
+ *    npm install @adiwajshing/baileys pino
+ * 3) Ejecuta: node main.js
+ * 4) Escanea el QR que aparecerá en la terminal (si no existe session.json).
+ *
+ * Este ejemplo es deliberadamente simple: maneja conexión/rea-conexión,
+ * guarda sesión en session.json y responde comandos básicos.
+ */
 
 const logger = pino({ level: 'info' });
 
