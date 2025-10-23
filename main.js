@@ -2,11 +2,32 @@ import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeys
 import pino from 'pino'
 import { Boom } from '@hapi/boom'
 import qrcode from 'qrcode-terminal'
+import fs from 'fs'
+import path from 'path'
 
 export async function startChappie(modo, numero = 'N/A') {
-  console.log('⚙️ Iniciando conexión con WhatsApp...')
+  console.log('⚙️ Iniciando Chappie-Bot...')
   console.log(`📞 Número de referencia: ${numero}`)
 
+  // Leer comandos existentes del repositorio
+  const comandosPath = path.join('./commands')
+  const comandos = new Map()
+
+  if (fs.existsSync(comandosPath)) {
+    const archivos = fs.readdirSync(comandosPath).filter(f => f.endsWith('.js'))
+    for (const archivo of archivos) {
+      const comandoModule = await import(`./commands/${archivo}`)
+      const cmd = comandoModule.default
+      if (cmd?.nombre && cmd?.ejecutar) {
+        comandos.set(cmd.nombre.toLowerCase(), cmd)
+        console.log(`🔹 Comando cargado: ${cmd.nombre}`)
+      }
+    }
+  } else {
+    console.log('⚠️ Carpeta commands/ no encontrada. No se cargarán comandos.')
+  }
+
+  // Conexión WhatsApp
   const { state, saveCreds } = await useMultiFileAuthState('./ChappieSession')
   const sock = makeWASocket({
     auth: state,
@@ -22,7 +43,7 @@ export async function startChappie(modo, numero = 'N/A') {
 
     if (qr) {
       console.log('📲 Escanea este QR con WhatsApp:')
-      qrcode.generate(qr, { small: true }) // QR más compacto
+      qrcode.generate(qr, { small: true }) // QR legible en Termux
     }
 
     if (connection === 'connecting') console.log('🔌 Conectando a WhatsApp...')
@@ -37,46 +58,27 @@ export async function startChappie(modo, numero = 'N/A') {
     }
   })
 
-  // Comandos con prefijo '.'
+  // Ejecutar comandos existentes
   sock.ev.on('messages.upsert', async (msg) => {
     const mensaje = msg.messages[0]
     if (!mensaje.message || mensaje.key.fromMe) return
 
     const texto = mensaje.message.conversation || mensaje.message.extendedTextMessage?.text || ''
     const sender = mensaje.key.remoteJid
-    const isGroup = sender.endsWith('@g.us')
     const prefijo = '.'
 
     if (!texto.startsWith(prefijo)) return
 
-    const comando = texto.slice(prefijo.length).split(' ')[0].toLowerCase()
-
-    switch (comando) {
-      case 'hola':
-        await sock.sendMessage(sender, { text: `👋 ¡Hola! Soy Chappie-Bot.` })
-        break
-      case 'ping':
-        await sock.sendMessage(sender, { text: '🏓 Pong!' })
-        break
-      case 'sticker':
-        if (mensaje.message.imageMessage) {
-          const buffer = await sock.downloadMediaMessage(mensaje)
-          await sock.sendMessage(sender, { sticker: buffer })
-        } else {
-          await sock.sendMessage(sender, { text: '❌ Envía una imagen con .sticker' })
-        }
-        break
-      case 'menu':
-        let menu = '🧠 *Chappie-Bot Comandos:*\n'
-        menu += '.hola – Saludo\n'
-        menu += '.ping – Respuesta rápida\n'
-        menu += '.sticker – Imagen a sticker\n'
-        menu += '.menu – Mostrar este menú\n'
-        menu += `📌 Responde en ${isGroup ? 'grupo' : 'chat privado'}`
-        await sock.sendMessage(sender, { text: menu })
-        break
-      default:
-        await sock.sendMessage(sender, { text: '❌ Comando no reconocido. Usa .menu' })
+    const nombreComando = texto.slice(prefijo.length).split(' ')[0].toLowerCase()
+    const cmd = comandos.get(nombreComando)
+    if (cmd) {
+      try {
+        await cmd.ejecutar(sock, sender, mensaje)
+      } catch (e) {
+        console.log(`❌ Error ejecutando comando ${nombreComando}:`, e)
+      }
+    } else {
+      await sock.sendMessage(sender, { text: '❌ Comando no reconocido.' })
     }
   })
 }
