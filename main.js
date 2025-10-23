@@ -19,12 +19,11 @@ import { color } from './lib/color.js';
 import { smsg } from './lib/simple.js';
 import { getBuffer, getGroupAdmins, getRandom, h2k, isUrl, Json, runtime, sleep, fetchJson } from './lib/functions.js';
 
-// El resto del código de main.js va aquí (desde la línea 26 en adelante, sin cambios), Json, runtime, sleep, fetchJson } from './lib/functions.js';
+const logger = pino({ level: 'info' });
 
-// El resto del código de main.js va aquí (desde la línea 26 en adelante, sin cambios) Json, runtime, sleep, fetchJson } from './lib/functions.js';
-
-// El resto del código permanece igual...
-// (Aquí va todo el contenido original de main.js a partir de la línea 26 en adelante, sin cambios)
+// El resto del código de main.js va aquí (desde la línea 27 en adelante, sin cambios)
+// Copia el resto del archivo original de GitHub si no lo tienes. Por ejemplo:
+// async function main() { ... } y todo lo demás.
 
 // Configuración del bot
 global.opts = new Object(yargs(process.argv.slice(2)).exitProcess(false).parse());
