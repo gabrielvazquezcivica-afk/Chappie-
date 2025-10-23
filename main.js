@@ -5,38 +5,43 @@ import qrcode from 'qrcode-terminal'
 import fs from 'fs'
 import path from 'path'
 
+// Función recursiva para leer todos los archivos JS en carpetas
+async function cargarComandosRecursivo(dir, comandos) {
+  const items = fs.readdirSync(dir, { withFileTypes: true })
+
+  for (const item of items) {
+    const itemPath = path.join(dir, item.name)
+    if (item.isDirectory()) {
+      await cargarComandosRecursivo(itemPath, comandos) // recursivo
+    } else if (item.isFile() && item.name.endsWith('.js') && item.name !== 'main.js' && item.name !== 'index.js') {
+      try {
+        const cmdModule = await import(itemPath)
+        const cmd = cmdModule.default
+        if (cmd?.nombre && cmd?.ejecutar) {
+          comandos.set(cmd.nombre.toLowerCase(), cmd)
+          console.log(`🔹 Comando cargado: ${cmd.nombre} desde ${itemPath}`)
+        } else {
+          console.log(`⚠️ Archivo ${itemPath} no tiene comando válido`)
+        }
+      } catch (e) {
+        console.log(`❌ Error cargando ${itemPath}:`, e)
+      }
+    }
+  }
+}
+
 export async function startChappie(modo, numero = 'N/A') {
   console.clear()
   console.log('⚙️ Iniciando Chappie-Bot...')
   console.log(`📞 Número de referencia: ${numero}`)
 
   // ----------------------------
-  // CARGAR COMANDOS DE "almacenamiento"
+  // CARGAR TODOS LOS COMANDOS RECURSIVAMENTE
   // ----------------------------
-  const storagePath = path.join('./almacenamiento')  // Carpeta exacta del repositorio
+  const repoPath = path.resolve('./') // raíz del repositorio
   const comandos = new Map()
-
-  if (fs.existsSync(storagePath)) {
-    const archivos = fs.readdirSync(storagePath).filter(f => f.endsWith('.js'))
-    console.log(`📂 Se encontraron ${archivos.length} archivos en almacenamiento`)
-
-    for (const archivo of archivos) {
-      try {
-        const cmdModule = await import(`./almacenamiento/${archivo}`)
-        const cmd = cmdModule.default
-        if (cmd?.nombre && cmd?.ejecutar) {
-          comandos.set(cmd.nombre.toLowerCase(), cmd)
-          console.log(`🔹 Comando cargado: ${cmd.nombre}`)
-        } else {
-          console.log(`⚠️ Archivo ${archivo} no tiene comando válido.`)
-        }
-      } catch (e) {
-        console.log(`❌ Error cargando ${archivo}:`, e)
-      }
-    }
-  } else {
-    console.log('⚠️ Carpeta de almacenamiento no encontrada.')
-  }
+  await cargarComandosRecursivo(repoPath, comandos)
+  console.log(`✅ Total de comandos cargados: ${comandos.size}`)
 
   // ----------------------------
   // CONEXIÓN WHATSAPP
