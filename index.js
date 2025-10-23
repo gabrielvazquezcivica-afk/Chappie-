@@ -8,7 +8,7 @@ console.log(`
 ===============================
 Selecciona modo de conexión:
 1) Escanear QR
-2) Emparejamiento por código
+2) Emparejamiento por código (solo referencia, no genera código)
 `)
 
 const rl = readline.createInterface({
@@ -22,10 +22,11 @@ rl.question('Introduce 1 o 2: ', async (opcion) => {
     rl.close()
     await startChappie('qr')
   } else if (opcion === '2') {
-    rl.question('📞 Ingresa tu número (ejemplo: 5215512345678): ', async (numero) => {
+    rl.question('📞 Ingresa tu número (solo referencia): ', async (numero) => {
       rl.close()
-      console.log(`🔑 Modo CODEBOT seleccionado para el número: ${numero}`)
-      await startChappie('code', numero)
+      console.log(`🔑 Número registrado para logs: ${numero}`)
+      console.log('⚠️ Usando QR de todos modos para evitar error 405')
+      await startChappie('qr', numero)
     })
   } else {
     console.log('❌ Opción inválida, usa 1 o 2')
