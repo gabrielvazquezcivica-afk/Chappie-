@@ -22,7 +22,7 @@ export async function startChappie(modo, numero = 'N/A') {
 
     if (qr) {
       console.log('📲 Escanea este QR con WhatsApp:')
-      qrcode.generate(qr, { small: false })
+      qrcode.generate(qr, { small: true }) // QR más compacto
     }
 
     if (connection === 'connecting') console.log('🔌 Conectando a WhatsApp...')
@@ -37,7 +37,7 @@ export async function startChappie(modo, numero = 'N/A') {
     }
   })
 
-  // Comandos básicos con prefijo '.'
+  // Comandos con prefijo '.'
   sock.ev.on('messages.upsert', async (msg) => {
     const mensaje = msg.messages[0]
     if (!mensaje.message || mensaje.key.fromMe) return
