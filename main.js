@@ -1,107 +1,93 @@
 import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys'
-import pino from 'pino'
-import qrcode from 'qrcode-terminal'
 import { Boom } from '@hapi/boom'
 import fs from 'fs'
 import path from 'path'
+import pino from 'pino'
+import qrcode from 'qrcode-terminal'
 
-// ----------------------------
-// Función para cargar plugins automáticamente
-// ----------------------------
+// 🧠 Cargar automáticamente todos los archivos .js dentro de las carpetas especificadas
 async function cargarPlugins() {
   const comandos = new Map()
-  const pluginsDir = path.join('./', 'plugins')
+  const carpetas = ['plugins', 'almacenamiento']
 
-  if (!fs.existsSync(pluginsDir)) {
-    console.log('⚠️ Carpeta plugins no encontrada.')
-    return comandos
-  }
+  for (const carpeta of carpetas) {
+    const dir = path.resolve(`./${carpeta}`)
+    if (!fs.existsSync(dir)) {
+      console.log(`⚠️ Carpeta ${carpeta} no encontrada.`)
+      continue
+    }
 
-  const archivos = fs.readdirSync(pluginsDir)
-
-  for (const archivo of archivos) {
-    const rutaArchivo = path.join(pluginsDir, archivo)
-    if (fs.statSync(rutaArchivo).isFile() && archivo.endsWith('.js')) {
+    const archivos = fs.readdirSync(dir).filter(a => a.endsWith('.js'))
+    for (const archivo of archivos) {
       try {
-        const modulo = await import(path.resolve(rutaArchivo))
-        const cmd = modulo.default
-        if (cmd?.nombre && cmd?.ejecutar) {
+        const ruta = path.join(dir, archivo)
+        const mod = await import(`file://${ruta}`)
+        const cmd = mod.default || mod
+        if (cmd?.nombre && typeof cmd?.ejecutar === 'function') {
           comandos.set(cmd.nombre.toLowerCase(), cmd)
-          console.log(`✅ Plugin cargado: ${cmd.nombre}`)
+          console.log(`✅ Comando cargado: ${cmd.nombre} (${carpeta}/${archivo})`)
         } else {
-          console.log(`⚠️ Plugin ${archivo} no tiene 'nombre' o 'ejecutar', se omite.`)
+          console.log(`⚙️ Archivo ${archivo} cargado (sin comando directo)`)
         }
-      } catch (e) {
-        console.log(`❌ Error cargando plugin ${archivo}:`, e.message)
+      } catch (err) {
+        console.log(`❌ Error cargando ${archivo}: ${err.message}`)
       }
     }
   }
 
-  console.log(`📂 Total de plugins cargados: ${comandos.size}`)
+  console.log(`📦 Total comandos cargados: ${comandos.size}`)
   return comandos
 }
 
-// ----------------------------
-// Función principal del bot
-// ----------------------------
+// 🚀 Inicia el bot
 export async function startChappie() {
   console.clear()
-  console.log('⚙️ Iniciando Chappie-Bot (sin comandos internos)...')
+  console.log('===============================')
+  console.log('🤖 Iniciando Chappie-Bot...')
+  console.log('===============================')
 
-  // Cargar plugins
   const comandos = await cargarPlugins()
-
-  // Conexión WhatsApp
   const { state, saveCreds } = await useMultiFileAuthState('./ChappieSession')
+
   const sock = makeWASocket({
     auth: state,
-    printQRInTerminal: false,
+    printQRInTerminal: true, // muestra el QR pequeño
     logger: pino({ level: 'silent' }),
-    browser: ['Ubuntu', 'Chrome', '22.04.4']
+    browser: ['ChappieBot', 'Chrome', '10.0']
   })
 
   sock.ev.on('creds.update', saveCreds)
 
-  sock.ev.on('connection.update', (update) => {
-    const { connection, lastDisconnect, qr } = update
-
-    if (qr) {
-      console.log('📲 Escanea este QR con WhatsApp:')
-      qrcode.generate(qr, { small: true })
-    }
-
-    if (connection === 'connecting') console.log('🔌 Conectando a WhatsApp...')
-    else if (connection === 'open') console.log('✅ Conectado a WhatsApp')
-    else if (connection === 'close') {
+  sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
+    if (connection === 'open') console.log('✅ Conectado a WhatsApp')
+    if (connection === 'close') {
       const reason = new Boom(lastDisconnect?.error)?.output?.statusCode
-      console.log(`❌ Conexión cerrada (razón: ${reason})`)
+      console.log(`❌ Conexión cerrada (${reason})`)
       if (reason !== DisconnectReason.loggedOut) startChappie()
     }
   })
 
-  // Escuchar mensajes y ejecutar plugins
+  // 📩 Leer mensajes
   sock.ev.on('messages.upsert', async (msg) => {
-    const mensaje = msg.messages[0]
-    if (!mensaje.message || mensaje.key.fromMe) return
+    const m = msg.messages[0]
+    if (!m.message || m.key.fromMe) return
 
-    const texto = mensaje.message.conversation || mensaje.message.extendedTextMessage?.text || ''
-    const sender = mensaje.key.remoteJid
-    const prefijo = '.'
+    const texto = m.message.conversation || m.message.extendedTextMessage?.text || ''
+    if (!texto.startsWith('.')) return
 
-    if (!texto.startsWith(prefijo)) return
+    const [nombreCmd, ...args] = texto.slice(1).trim().split(/\s+/)
+    const comando = comandos.get(nombreCmd.toLowerCase())
 
-    const nombreComando = texto.slice(prefijo.length).split(' ')[0].toLowerCase()
-    const cmd = comandos.get(nombreComando)
+    if (!comando) {
+      console.log(`❓ Comando no encontrado: ${nombreCmd}`)
+      return
+    }
 
-    if (cmd) {
-      console.log(`⚡ Ejecutando plugin: ${cmd.nombre} desde ${sender}`)
-      try {
-        await cmd.ejecutar(sock, sender, mensaje)
-      } catch (e) {
-        console.log(`❌ Error ejecutando plugin ${nombreComando}:`, e)
-      }
-    } else {
-      console.log(`❌ Comando/plugin no reconocido: ${nombreComando}`)
+    try {
+      console.log(`⚡ Ejecutando comando: ${comando.nombre}`)
+      await comando.ejecutar(sock, m, args)
+    } catch (err) {
+      console.error(`❌ Error ejecutando ${nombreCmd}:`, err)
     }
   })
 }
