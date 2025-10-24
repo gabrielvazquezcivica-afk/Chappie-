@@ -1,93 +1,63 @@
-import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys'
-import { Boom } from '@hapi/boom'
 import fs from 'fs'
 import path from 'path'
-import pino from 'pino'
-import qrcode from 'qrcode-terminal'
+import chalk from 'chalk'
+import { createRequire } from 'module'
+const require = createRequire(import.meta.url) // permite usar require en ES Modules
 
-// 🧠 Cargar automáticamente todos los archivos .js dentro de las carpetas especificadas
-async function cargarPlugins() {
+// 🧠 Función para cargar los plugins desde "plugins" y "almacenamiento"
+export async function cargarPlugins() {
   const comandos = new Map()
   const carpetas = ['plugins', 'almacenamiento']
+
+  console.log(chalk.cyan.bold('=============================='))
+  console.log(chalk.cyan.bold('⚙️  Cargando Plugins de Chappie'))
+  console.log(chalk.cyan.bold('==============================\n'))
 
   for (const carpeta of carpetas) {
     const dir = path.resolve(`./${carpeta}`)
     if (!fs.existsSync(dir)) {
-      console.log(`⚠️ Carpeta ${carpeta} no encontrada.`)
+      console.log(chalk.yellow(`⚠️  Carpeta ${carpeta} no encontrada.`))
       continue
     }
 
     const archivos = fs.readdirSync(dir).filter(a => a.endsWith('.js'))
+    if (archivos.length === 0) {
+      console.log(chalk.yellow(`⚠️  No hay archivos en ${carpeta}/`))
+      continue
+    }
+
+    console.log(chalk.blue.bold(`📂 Leyendo carpeta: ${carpeta}/`))
+
     for (const archivo of archivos) {
       try {
         const ruta = path.join(dir, archivo)
-        const mod = await import(`file://${ruta}`)
+        let mod
+
+        // Intentar importar como ESM
+        try {
+          mod = await import(`file://${ruta}`)
+        } catch {
+          // Si falla, cargar como CommonJS
+          mod = require(ruta)
+        }
+
         const cmd = mod.default || mod
         if (cmd?.nombre && typeof cmd?.ejecutar === 'function') {
           comandos.set(cmd.nombre.toLowerCase(), cmd)
-          console.log(`✅ Comando cargado: ${cmd.nombre} (${carpeta}/${archivo})`)
+          console.log(chalk.green(`✅ ${cmd.nombre} (${carpeta}/${archivo}) cargado correctamente`))
         } else {
-          console.log(`⚙️ Archivo ${archivo} cargado (sin comando directo)`)
+          console.log(chalk.gray(`⚙️  ${archivo} cargado (sin comando directo)`))
         }
+
       } catch (err) {
-        console.log(`❌ Error cargando ${archivo}: ${err.message}`)
+        console.log(chalk.red(`❌ Error cargando ${archivo}: ${err.message}`))
       }
     }
   }
 
-  console.log(`📦 Total comandos cargados: ${comandos.size}`)
+  console.log(chalk.cyan.bold('\n=============================='))
+  console.log(chalk.cyan(`📦 Total comandos cargados: ${comandos.size}`))
+  console.log(chalk.cyan.bold('==============================\n'))
+
   return comandos
-}
-
-// 🚀 Inicia el bot
-export async function startChappie() {
-  console.clear()
-  console.log('===============================')
-  console.log('🤖 Iniciando Chappie-Bot...')
-  console.log('===============================')
-
-  const comandos = await cargarPlugins()
-  const { state, saveCreds } = await useMultiFileAuthState('./ChappieSession')
-
-  const sock = makeWASocket({
-    auth: state,
-    printQRInTerminal: true, // muestra el QR pequeño
-    logger: pino({ level: 'silent' }),
-    browser: ['ChappieBot', 'Chrome', '10.0']
-  })
-
-  sock.ev.on('creds.update', saveCreds)
-
-  sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
-    if (connection === 'open') console.log('✅ Conectado a WhatsApp')
-    if (connection === 'close') {
-      const reason = new Boom(lastDisconnect?.error)?.output?.statusCode
-      console.log(`❌ Conexión cerrada (${reason})`)
-      if (reason !== DisconnectReason.loggedOut) startChappie()
-    }
-  })
-
-  // 📩 Leer mensajes
-  sock.ev.on('messages.upsert', async (msg) => {
-    const m = msg.messages[0]
-    if (!m.message || m.key.fromMe) return
-
-    const texto = m.message.conversation || m.message.extendedTextMessage?.text || ''
-    if (!texto.startsWith('.')) return
-
-    const [nombreCmd, ...args] = texto.slice(1).trim().split(/\s+/)
-    const comando = comandos.get(nombreCmd.toLowerCase())
-
-    if (!comando) {
-      console.log(`❓ Comando no encontrado: ${nombreCmd}`)
-      return
-    }
-
-    try {
-      console.log(`⚡ Ejecutando comando: ${comando.nombre}`)
-      await comando.ejecutar(sock, m, args)
-    } catch (err) {
-      console.error(`❌ Error ejecutando ${nombreCmd}:`, err)
-    }
-  })
 }
