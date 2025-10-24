@@ -1,63 +1,102 @@
+// main.js — Chappie-Bot 💬
+// Hecho para funcionar con ES Modules ("type": "module")
+
 import fs from 'fs'
 import path from 'path'
-import chalk from 'chalk'
-import { createRequire } from 'module'
-const require = createRequire(import.meta.url) // permite usar require en ES Modules
+import { fileURLToPath } from 'url'
+import makeWASocket, { useMultiFileAuthState } from '@whiskeysockets/baileys'
 
-// 🧠 Función para cargar los plugins desde "plugins" y "almacenamiento"
+// Compatibilidad con rutas
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
+// 📦 Carpeta donde están tus plugins
+const PLUGINS_DIR = path.join(__dirname, 'plugins')
+const ALMACENAMIENTO_DIR = path.join(__dirname, 'almacenamiento')
+
+// ✅ Cargar automáticamente los plugins
 export async function cargarPlugins() {
-  const comandos = new Map()
-  const carpetas = ['plugins', 'almacenamiento']
+  const comandos = []
 
-  console.log(chalk.cyan.bold('=============================='))
-  console.log(chalk.cyan.bold('⚙️  Cargando Plugins de Chappie'))
-  console.log(chalk.cyan.bold('==============================\n'))
-
-  for (const carpeta of carpetas) {
-    const dir = path.resolve(`./${carpeta}`)
+  async function cargarDesde(dir) {
     if (!fs.existsSync(dir)) {
-      console.log(chalk.yellow(`⚠️  Carpeta ${carpeta} no encontrada.`))
-      continue
+      console.log(`⚠️ Carpeta ${dir} no encontrada.`)
+      return
     }
 
-    const archivos = fs.readdirSync(dir).filter(a => a.endsWith('.js'))
-    if (archivos.length === 0) {
-      console.log(chalk.yellow(`⚠️  No hay archivos en ${carpeta}/`))
-      continue
-    }
-
-    console.log(chalk.blue.bold(`📂 Leyendo carpeta: ${carpeta}/`))
-
-    for (const archivo of archivos) {
+    const files = fs.readdirSync(dir).filter(f => f.endsWith('.js'))
+    for (const file of files) {
       try {
-        const ruta = path.join(dir, archivo)
-        let mod
+        const filePath = path.join(dir, file)
+        const plugin = await import(`file://${filePath}`)
 
-        // Intentar importar como ESM
-        try {
-          mod = await import(`file://${ruta}`)
-        } catch {
-          // Si falla, cargar como CommonJS
-          mod = require(ruta)
+        if (plugin.default || plugin.handler) {
+          comandos.push(plugin.default || plugin.handler)
         }
 
-        const cmd = mod.default || mod
-        if (cmd?.nombre && typeof cmd?.ejecutar === 'function') {
-          comandos.set(cmd.nombre.toLowerCase(), cmd)
-          console.log(chalk.green(`✅ ${cmd.nombre} (${carpeta}/${archivo}) cargado correctamente`))
-        } else {
-          console.log(chalk.gray(`⚙️  ${archivo} cargado (sin comando directo)`))
-        }
-
+        const comando = plugin.name || file.replace('.js', '')
+        console.log(`⚙️ Archivo ${file} cargado correctamente`)
       } catch (err) {
-        console.log(chalk.red(`❌ Error cargando ${archivo}: ${err.message}`))
+        console.error(`❌ Error cargando ${file}:`, err.message)
       }
     }
   }
 
-  console.log(chalk.cyan.bold('\n=============================='))
-  console.log(chalk.cyan(`📦 Total comandos cargados: ${comandos.size}`))
-  console.log(chalk.cyan.bold('==============================\n'))
+  await cargarDesde(PLUGINS_DIR)
+  await cargarDesde(ALMACENAMIENTO_DIR)
 
+  console.log(`📦 Total comandos cargados: ${comandos.length}`)
   return comandos
+}
+
+// 🧠 Función principal del bot
+export async function startChappie() {
+  console.clear()
+  console.log('==============================')
+  console.log('🤖 Iniciando Chappie-Bot...')
+  console.log('==============================')
+
+  // 1️⃣ Cargar plugins
+  await cargarPlugins()
+
+  // 2️⃣ Autenticación con Baileys
+  const { state, saveCreds } = await useMultiFileAuthState('./ChappieSession')
+
+  // 3️⃣ Crear socket
+  const sock = makeWASocket({
+    printQRInTerminal: true,
+    auth: state,
+    browser: ['Chappie-Bot', 'Safari', '1.0.0'],
+  })
+
+  sock.ev.on('creds.update', saveCreds)
+
+  // 4️⃣ Leer mensajes
+  sock.ev.on('messages.upsert', async ({ messages }) => {
+    const msg = messages[0]
+    if (!msg.message) return
+
+    const body =
+      msg.message.conversation ||
+      msg.message.extendedTextMessage?.text ||
+      msg.message.imageMessage?.caption ||
+      ''
+    const sender = msg.key.participant || msg.key.remoteJid
+
+    if (body.startsWith('.')) {
+      const command = body.slice(1).trim().split(' ')[0].toLowerCase()
+      console.log(`🧩 Comando recibido: ${command} de ${sender}`)
+      await sock.sendMessage(msg.key.remoteJid, {
+        text: `✅ Comando recibido: *${command}*`,
+      })
+    }
+  })
+
+  console.log('🔌 Conectando a WhatsApp...')
+  console.log('✅ Conectado a WhatsApp')
+}
+
+// Ejecutar automáticamente si se ejecuta este archivo directamente
+if (import.meta.url === `file://${process.argv[1]}`) {
+  startChappie()
 }
