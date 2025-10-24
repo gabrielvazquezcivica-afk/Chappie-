@@ -1,102 +1,106 @@
-// main.js — Chappie-Bot 💬
-// Hecho para funcionar con ES Modules ("type": "module")
-
-import fs from 'fs'
-import path from 'path'
+// main.js
+import { join, resolve, extname } from 'path'
+import { readdirSync, statSync } from 'fs'
 import { fileURLToPath } from 'url'
-import makeWASocket, { useMultiFileAuthState } from '@whiskeysockets/baileys'
+import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys'
+import pino from 'pino'
+import qrcode from 'qrcode-terminal'
+import { Boom } from '@hapi/boom'
 
-// Compatibilidad con rutas
 const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
+const __dirname = resolve(__filename, '..')
 
-// 📦 Carpeta donde están tus plugins
-const PLUGINS_DIR = path.join(__dirname, 'plugins')
-const ALMACENAMIENTO_DIR = path.join(__dirname, 'almacenamiento')
+// Carpeta(s) donde están los comandos/plugin
+const pluginDirs = [
+  join(__dirname, 'plugins'),
+  join(__dirname, 'almacenamiento')
+]
 
-// ✅ Cargar automáticamente los plugins
-export async function cargarPlugins() {
-  const comandos = []
-
-  async function cargarDesde(dir) {
-    if (!fs.existsSync(dir)) {
-      console.log(`⚠️ Carpeta ${dir} no encontrada.`)
-      return
-    }
-
-    const files = fs.readdirSync(dir).filter(f => f.endsWith('.js'))
-    for (const file of files) {
-      try {
-        const filePath = path.join(dir, file)
-        const plugin = await import(`file://${filePath}`)
-
-        if (plugin.default || plugin.handler) {
-          comandos.push(plugin.default || plugin.handler)
+async function loadPlugins() {
+  const commands = new Map()
+  for (const dir of pluginDirs) {
+    try {
+      const files = readdirSync(dir)
+      for (const file of files) {
+        const full = join(dir, file)
+        if (statSync(full).isFile() && extname(full) === '.js') {
+          try {
+            const module = await import(`file://${full}`)
+            const cmd = module.default || module
+            if (cmd && cmd.nombre && typeof cmd.ejecutar === 'function') {
+              commands.set(cmd.nombre.toLowerCase(), cmd)
+              console.log(`✅ Comando cargado: ${cmd.nombre} (${dir}/${file})`)
+            } else {
+              console.log(`⚠️ Archivo cargado sin comando válido: ${dir}/${file}`)
+            }
+          } catch (e) {
+            console.log(`❌ Error cargando archivo ${dir}/${file}: ${e.message}`)
+          }
         }
-
-        const comando = plugin.name || file.replace('.js', '')
-        console.log(`⚙️ Archivo ${file} cargado correctamente`)
-      } catch (err) {
-        console.error(`❌ Error cargando ${file}:`, err.message)
       }
+    } catch {
+      console.log(`⚠️ Carpeta no encontrada o sin acceso: ${dir}`)
     }
   }
-
-  await cargarDesde(PLUGINS_DIR)
-  await cargarDesde(ALMACENAMIENTO_DIR)
-
-  console.log(`📦 Total comandos cargados: ${comandos.length}`)
-  return comandos
+  console.log(`📦 Total de comandos cargados: ${commands.size}`)
+  return commands
 }
 
-// 🧠 Función principal del bot
 export async function startChappie() {
   console.clear()
-  console.log('==============================')
+  console.log('===============================')
   console.log('🤖 Iniciando Chappie-Bot...')
-  console.log('==============================')
+  console.log('===============================')
 
-  // 1️⃣ Cargar plugins
-  await cargarPlugins()
+  const commands = await loadPlugins()
+  const { state, saveCreds } = await useMultiFileAuthState(join(__dirname, 'ChappieSession'))
 
-  // 2️⃣ Autenticación con Baileys
-  const { state, saveCreds } = await useMultiFileAuthState('./ChappieSession')
-
-  // 3️⃣ Crear socket
   const sock = makeWASocket({
-    printQRInTerminal: true,
     auth: state,
-    browser: ['Chappie-Bot', 'Safari', '1.0.0'],
+    printQRInTerminal: true,
+    logger: pino({ level: 'silent' }),
+    browser: ['ChappieBot', 'Chrome', '1.0.0']
   })
 
   sock.ev.on('creds.update', saveCreds)
 
-  // 4️⃣ Leer mensajes
-  sock.ev.on('messages.upsert', async ({ messages }) => {
-    const msg = messages[0]
-    if (!msg.message) return
-
-    const body =
-      msg.message.conversation ||
-      msg.message.extendedTextMessage?.text ||
-      msg.message.imageMessage?.caption ||
-      ''
-    const sender = msg.key.participant || msg.key.remoteJid
-
-    if (body.startsWith('.')) {
-      const command = body.slice(1).trim().split(' ')[0].toLowerCase()
-      console.log(`🧩 Comando recibido: ${command} de ${sender}`)
-      await sock.sendMessage(msg.key.remoteJid, {
-        text: `✅ Comando recibido: *${command}*`,
-      })
+  sock.ev.on('connection.update', (update) => {
+    const { connection, lastDisconnect, qr } = update
+    if (qr) {
+      console.log('📲 Escanea este QR:')
+      qrcode.generate(qr, { small: true })
+    }
+    if (connection === 'open') {
+      console.log('✅ Conectado a WhatsApp')
+    }
+    if (connection === 'close') {
+      const reason = new Boom(lastDisconnect?.error)?.output?.statusCode
+      console.log(`❌ Conexión cerrada (razón: ${reason})`)
+      if (reason !== DisconnectReason.loggedOut) {
+        startChappie()
+      }
     }
   })
 
-  console.log('🔌 Conectando a WhatsApp...')
-  console.log('✅ Conectado a WhatsApp')
-}
+  sock.ev.on('messages.upsert', async ({ messages }) => {
+    const m = messages[0]
+    if (!m.message || m.key.fromMe) return
+    const text = m.message.conversation ||
+                 m.message.extendedTextMessage?.text ||
+                 ''
+    if (!text.startsWith('.')) return
 
-// Ejecutar automáticamente si se ejecuta este archivo directamente
-if (import.meta.url === `file://${process.argv[1]}`) {
-  startChappie()
+    const [cmdName, ...args] = text.slice(1).trim().split(/\s+/)
+    const cmd = commands.get(cmdName.toLowerCase())
+    if (!cmd) {
+      await sock.sendMessage(m.key.remoteJid, { text: `❌ Comando no reconocido: ${cmdName}` })
+      return
+    }
+    try {
+      console.log(`⚡ Ejecutando comando: ${cmd.nombre}`)
+      await cmd.ejecutar(sock, m, args)
+    } catch (err) {
+      console.error(`❌ Error ejecutando ${cmdName}:`, err)
+    }
+  })
 }
