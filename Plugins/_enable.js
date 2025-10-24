@@ -2,7 +2,6 @@ import fs from 'fs';
 import path from 'path';
 
 export default (chappie, chalk) => {
-
     const enabledFile = path.join('./plugins', 'enabled.json');
 
     if (!fs.existsSync(enabledFile)) {
@@ -19,8 +18,17 @@ export default (chappie, chalk) => {
         if (!msg.message) return;
 
         const from = msg.key.remoteJid;
-        const content = msg.message.conversation || msg.message.extendedTextMessage?.text;
+
+        // Obtener texto del mensaje, sin importar si es respuesta o media
+        let content = '';
+        if (msg.message.conversation) content = msg.message.conversation;
+        else if (msg.message.extendedTextMessage?.text) content = msg.message.extendedTextMessage.text;
+        else if (msg.message.imageMessage?.caption) content = msg.message.imageMessage.caption;
+        else if (msg.message.videoMessage?.caption) content = msg.message.videoMessage.caption;
+        else if (msg.message.documentMessage?.caption) content = msg.message.documentMessage.caption;
+
         if (!content) return;
+        content = content.trim();
 
         if (!content.startsWith('.enable') && !content.startsWith('.disable')) return;
 
@@ -47,14 +55,15 @@ export default (chappie, chalk) => {
 
         if (action === 'enable') {
             enabled[from][cmdName] = true;
-            await chappie.sendMessage(from, { text: `✅ Comando ${cmdName} habilitado.` });
+            await chappie.sendMessage(from, { text: `✅ Comando ${cmdName} habilitado correctamente.` });
+            console.log(chalk.green('[✔ Comando habilitado]'), chalk.blue(cmdName), 'en grupo', chalk.magenta(from));
         } else {
             enabled[from][cmdName] = false;
-            await chappie.sendMessage(from, { text: `❌ Comando ${cmdName} deshabilitado.` });
+            await chappie.sendMessage(from, { text: `❌ Comando ${cmdName} deshabilitado correctamente.` });
+            console.log(chalk.red('[✖ Comando deshabilitado]'), chalk.blue(cmdName), 'en grupo', chalk.magenta(from));
         }
 
         saveEnabled(enabled);
-        console.log(chalk.green(`[✔ Comando ${action}]`), chalk.blue(cmdName), 'en grupo', chalk.magenta(from));
     });
 
     // Función global para verificar si un comando está habilitado
