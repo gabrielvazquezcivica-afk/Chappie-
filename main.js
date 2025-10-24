@@ -1,71 +1,108 @@
 // main.js
-import { Client, LocalAuth } from 'whatsapp-web.js';
-import qrcode from 'qrcode-terminal';
+import { default: makeWASocket, useSingleFileAuthState, DisconnectReason, fetchLatestBaileysVersion } from '@whiskeysockets/baileys';
+import { Boom } from '@hapi/boom';
 import fs from 'fs';
 import path from 'path';
+import P from 'pino';
+import readline from 'readline';
 
-// Nombre del bot
-const BOT_NAME = 'Chappie-Bot';
+// Carpeta para la sesión
+const SESSION_FILE = './ChappieSession.json';
+const { state, saveState } = useSingleFileAuthState(SESSION_FILE);
 
-// Inicialización del cliente con autenticación local
-const client = new Client({
-    authStrategy: new LocalAuth({ clientId: BOT_NAME })
-});
+async function startChappie() {
+    // Leer opción del usuario
+    const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+    });
 
-// Eventos del cliente
-client.on('qr', (qr) => {
-    console.log(`\n[${BOT_NAME}] Escanea este QR:`);
-    qrcode.generate(qr, { small: true });
-});
+    console.log('Selecciona modo de conexión:');
+    console.log('1) Escanear QR');
+    console.log('2) Emparejamiento por código');
 
-client.on('ready', () => {
-    console.log(`\n[${BOT_NAME}] Conectado y listo para usar!`);
-});
+    rl.question('Introduce 1 o 2: ', async (option) => {
+        rl.close();
+        option = option.trim();
 
-client.on('authenticated', () => {
-    console.log(`\n[${BOT_NAME}] Sesión autenticada!`);
-});
-
-client.on('auth_failure', msg => {
-    console.error(`[${BOT_NAME}] Fallo de autenticación: ${msg}`);
-});
-
-client.on('disconnected', (reason) => {
-    console.log(`[${BOT_NAME}] Desconectado. Razón: ${reason}`);
-});
-
-// Cargar plugins dinámicamente desde la carpeta plugins
-const pluginsPath = path.join('./plugins');
-if (fs.existsSync(pluginsPath)) {
-    const pluginFiles = fs.readdirSync(pluginsPath).filter(file => file.endsWith('.js'));
-    console.log(`[${BOT_NAME}] Cargando plugins...`);
-    for (const file of pluginFiles) {
-        try {
-            const plugin = await import(path.join(pluginsPath, file));
-            console.log(`[${BOT_NAME}] Plugin cargado: ${file}`);
-        } catch (err) {
-            console.error(`[${BOT_NAME}] Error cargando ${file}: ${err.message}`);
+        if (option !== '1' && option !== '2') {
+            console.log('Opción inválida, saliendo...');
+            process.exit(0);
         }
-    }
-} else {
-    console.warn(`[${BOT_NAME}] Carpeta plugins no encontrada.`);
+
+        const { version } = await fetchLatestBaileysVersion();
+        const sock = makeWASocket({
+            auth: state,
+            printQRInTerminal: option === '1', // QR solo si opción 1
+            logger: P({ level: 'silent' }),
+            version
+        });
+
+        sock.ev.on('connection.update', async (update) => {
+            const { connection, lastDisconnect, qr } = update;
+
+            if (connection === 'close') {
+                const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
+                console.log('❌ Conexión cerrada, razón:', reason);
+                startChappie();
+            } else if (connection === 'open') {
+                console.log('✅ Conectado a WhatsApp');
+            }
+
+            if (qr && option === '1') {
+                console.log('📌 Escanea este QR en tu WhatsApp:');
+            }
+        });
+
+        sock.ev.on('creds.update', saveState);
+
+        if (option === '2') {
+            // Emparejamiento por código
+            const rlCode = readline.createInterface({
+                input: process.stdin,
+                output: process.stdout
+            });
+            rlCode.question('📞 Ingresa tu número (ejemplo: 5215512345678): ', async (number) => {
+                rlCode.close();
+                console.log(`🔑 Generando código de emparejamiento para ${number}...`);
+                try {
+                    const code = await sock.requestPairingCode(number.trim());
+                    console.log(`✅ Código de emparejamiento para ${number}: ${code}`);
+                } catch (e) {
+                    console.log('❌ Error generando código:', e.message);
+                }
+            });
+        }
+
+        // Cargar plugins
+        cargarPlugins(sock);
+    });
 }
 
-// Manejo básico de mensajes
-client.on('message', async message => {
-    const chat = await message.getChat();
-    const body = message.body.toLowerCase();
-
-    // Comandos básicos de ejemplo
-    if (body === '!menu') {
-        message.reply('📜 Aquí va el menú de comandos de Chappie-Bot');
-    }
-    if (body === '!welcome') {
-        message.reply('👋 Bienvenido al grupo!');
+// Función para cargar plugins
+function cargarPlugins(sock) {
+    const pluginsDir = './plugins';
+    if (!fs.existsSync(pluginsDir)) {
+        console.log('⚠️ Carpeta plugins no encontrada.');
+        return;
     }
 
-    // Plugins pueden agregar más comandos
-});
+    const archivos = fs.readdirSync(pluginsDir).filter(file => file.endsWith('.js'));
+    let total = 0;
+    for (let file of archivos) {
+        const filePath = path.join(pluginsDir, file);
+        try {
+            import(filePath).then(plugin => {
+                if (plugin.default) plugin.default(sock);
+                console.log(`⚙️ Plugin ${file} cargado`);
+                total++;
+            });
+        } catch (e) {
+            console.log(`❌ Error cargando ${file}:`, e.message);
+        }
+    }
+    console.log(`📦 Total plugins cargados: ${total}`);
+}
 
-// Inicializar el cliente
-client.initialize();
+// Iniciar bot
+startChappie();
