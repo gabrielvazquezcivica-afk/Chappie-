@@ -1,8 +1,4 @@
 // index.js
-import './main.js';
+import { startChappie } from './main.js';
 
-console.log(`
-===============================
-🤖 Iniciando Chappie-Bot...
-===============================
-`);
+startChappie();
