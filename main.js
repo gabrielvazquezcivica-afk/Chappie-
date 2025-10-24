@@ -1,89 +1,92 @@
-// main.js - CommonJS
-const { default: makeWASocket, useSingleFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
-const { Boom } = require('@hapi/boom');
-const fs = require('fs');
-const path = require('path');
-const P = require('pino');
-const readline = require('readline');
+// main.js
+import makeWASocket, { DisconnectReason, fetchLatestBaileysVersion, useSingleFileAuthState } from '@whiskeysockets/baileys';
+import { Boom } from '@hapi/boom';
+import fs from 'fs';
+import path from 'path';
+import P from 'pino';
+import readline from 'readline';
 
-// Auth state
-const { state, saveCreds } = useSingleFileAuthState('./ChappieSession.json');
+// Carpeta de sesión
+const SESSION_FILE = './ChappieSession.json';
+const { state, saveCreds } = await useSingleFileAuthState(SESSION_FILE);
 
-// Carga plugins
-function loadPlugins() {
-    const pluginsPath = path.join(__dirname, 'plugins');
-    if (!fs.existsSync(pluginsPath)) {
-        console.log('⚠️ Carpeta plugins no encontrada.');
-        return [];
+// Leer comandos desde almacenamiento
+const pluginsFolder = path.join('./almacenamiento');
+let comandos = [];
+if (fs.existsSync(pluginsFolder)) {
+    const files = fs.readdirSync(pluginsFolder);
+    for (let file of files) {
+        if (file.endsWith('.js')) comandos.push(file);
     }
-    const files = fs.readdirSync(pluginsPath).filter(f => f.endsWith('.js'));
-    const plugins = [];
-    for (const file of files) {
-        try {
-            const plugin = require(path.join(pluginsPath, file));
-            plugins.push(plugin);
-            console.log(`⚙️ Plugin cargado: ${file}`);
-        } catch (e) {
-            console.log(`❌ Error cargando ${file}: ${e.message}`);
-        }
-    }
-    return plugins;
 }
 
-// Inicia bot
-async function startChappie() {
-    const plugins = loadPlugins();
-
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-
+// Función principal
+export async function startChappie() {
     console.log('===============================');
     console.log('⚙️  Iniciando Chappie-Bot');
     console.log('===============================');
-    console.log('Selecciona modo de conexión:');
-    console.log('1) Escanear QR');
-    console.log('2) Emparejamiento por código');
 
-    rl.question('Introduce 1 o 2: ', async (modo) => {
-        let client;
+    // Preguntar modo de conexión
+    const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+    });
 
-        if (modo === '1') {
+    rl.question('Selecciona modo de conexión:\n1) Escanear QR\n2) Emparejamiento por código\nIntroduce 1 o 2: ', async (modo) => {
+        let sock;
+        const [version] = await fetchLatestBaileysVersion();
+
+        if (modo.trim() === '1') {
             console.log('🔑 Modo QR seleccionado');
-            client = makeWASocket({
+            sock = makeWASocket({ 
+                logger: P({ level: 'silent' }),
+                printQRInTerminal: true,
                 auth: state,
-                logger: P({ level: 'silent' })
+                version
             });
-
-            client.ev.on('connection.update', (update) => {
-                if (update.qr) console.log('Escanea este QR:\n' + update.qr);
-                if (update.connection === 'open') console.log('✅ Conectado a WhatsApp');
-                if (update.connection === 'close') console.log('❌ Conexión cerrada');
-            });
-
-        } else if (modo === '2') {
+        } else if (modo.trim() === '2') {
             rl.question('📞 Ingresa tu número (ejemplo: 5215512345678): ', async (numero) => {
                 console.log(`🔑 Modo CODEBOT seleccionado para el número: ${numero}`);
-                console.log('⚙️ Generando código de emparejamiento...');
-                // Código de ejemplo (Baileys actual no permite codebot directo, esto simula)
-                console.log(`✅ Código de emparejamiento para ${numero}: 123ABC`);
-                rl.close();
+                try {
+                    sock = makeWASocket({ auth: state, version });
+                    // Aquí se debería generar el emparejamiento por código usando Baileys
+                } catch (e) {
+                    console.log('❌ Error en emparejamiento:', e);
+                }
             });
-            return;
         } else {
-            console.log('⚠️ Opción inválida');
+            console.log('❌ Opción inválida');
             rl.close();
             return;
         }
 
-        client.ev.on('messages.upsert', async (m) => {
-            // Aquí puedes ejecutar los plugins con cada mensaje
-            for (const plugin of plugins) {
-                if (plugin && plugin.run) plugin.run(client, m);
-            }
-        });
+        if (sock) {
+            sock.ev.on('connection.update', (update) => {
+                const { connection, lastDisconnect } = update;
+                console.log('update connection:', update);
+                if (connection === 'close') {
+                    const reason = (lastDisconnect?.error)?.output?.statusCode;
+                    console.log(`❌ Conexión cerrada, razón: ${reason}`);
+                } else if (connection === 'open') {
+                    console.log('✅ Conectado a WhatsApp');
+                }
+            });
 
-        client.ev.on('creds.update', saveCreds);
+            sock.ev.on('creds.update', saveCreds);
+
+            // Listener de mensajes
+            sock.ev.on('messages.upsert', async (msg) => {
+                const m = msg.messages[0];
+                if (!m.message) return;
+                const body = m.message.conversation || '';
+                // Buscar comando
+                comandos.forEach(cmdFile => {
+                    import(path.join(pluginsFolder, cmdFile)).then(mod => {
+                        if (mod?.default) mod.default(sock, m, body);
+                    });
+                });
+            });
+        }
         rl.close();
     });
 }
-
-module.exports = { startChappie };
