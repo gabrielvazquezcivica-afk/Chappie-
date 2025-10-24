@@ -1,73 +1,69 @@
-// main.js
 import makeWASocket, { DisconnectReason, fetchLatestBaileysVersion, useMultiFileAuthState } from '@whiskeysockets/baileys';
-import { Boom } from '@hapi/boom';
+import chalk from 'chalk';
 import fs from 'fs';
 import path from 'path';
-import Pino from 'pino';
 
-const logger = Pino({ level: 'info' });
-const PLUGINS_DIR = './plugins';
-
-export async function startChappie() {
-    // Inicializa el estado de autenticación
-    const { state, saveCreds } = await useMultiFileAuthState('./ChappieSession');
-
-    const { version } = await fetchLatestBaileysVersion();
+const startChappie = async () => {
+    const { state, saveCreds } = await useMultiFileAuthState('ChappieSession');
 
     const chappie = makeWASocket({
-        logger,
-        printQRInTerminal: true,
         auth: state,
-        version,
+        printQRInTerminal: true
     });
 
-    // Guardar credenciales automáticamente
-    chappie.ev.on('creds.update', saveCreds);
-
-    // Reconexión automática
-    chappie.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect } = update;
-        if (connection === 'close') {
-            const reason = (lastDisconnect?.error as Boom)?.output?.statusCode || 'unknown';
-            logger.info(`Conexión cerrada, razón: ${reason}. Reconectando...`);
-            startChappie(); // reinicia el bot
-        } else if (connection === 'open') {
-            logger.info('✅ Conectado a WhatsApp');
-        }
-    });
-
-    // Cargar plugins automáticamente
-    if (!fs.existsSync(PLUGINS_DIR)) {
-        logger.warn('⚠️ Carpeta plugins no encontrada.');
+    // ------------------- CARGA DE PLUGINS -------------------
+    const pluginsDir = path.resolve('./plugins');
+    if (!fs.existsSync(pluginsDir)) {
+        console.log(chalk.red('[❌] Carpeta plugins no encontrada.'));
     } else {
-        const pluginFiles = fs.readdirSync(PLUGINS_DIR).filter(f => f.endsWith('.js'));
-        for (const file of pluginFiles) {
+        const pluginFiles = fs.readdirSync(pluginsDir).filter(f => f.endsWith('.js'));
+        pluginFiles.forEach(async file => {
             try {
-                const pluginPath = path.resolve(PLUGINS_DIR, file);
-                const plugin = await import(pluginPath);
-                if (plugin?.default) {
-                    plugin.default(chappie);
-                    logger.info(`⚙️ Plugin cargado: ${file}`);
-                }
+                const pluginPath = path.join(pluginsDir, file);
+                const plugin = await import(`file://${pluginPath}`);
+                if (plugin.default) plugin.default(chappie, chalk);
+                console.log(chalk.green('[✔ Plugin cargado:]'), chalk.blue(file));
             } catch (err) {
-                logger.error(`❌ Error cargando ${file}: ${err.message}`);
+                console.log(chalk.red('[❌ Error cargando plugin:]'), chalk.yellow(file), err.message);
             }
-        }
+        });
     }
 
-    // Ejemplo de evento de mensaje
-    chappie.ev.on('messages.upsert', async ({ messages, type }) => {
-        if (type !== 'notify') return;
+    // ------------------- EVENTOS DE CONEXIÓN -------------------
+    chappie.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect, qr } = update;
+        if (qr) console.log(chalk.blueBright('[QR] Escanea este QR:'), chalk.cyan(qr));
+        if (connection === 'open') console.log(chalk.green('[✔ Conectado a WhatsApp]'));
+        if (connection === 'close') {
+            const reason = (lastDisconnect?.error)?.output?.statusCode || 'unknown';
+            console.log(chalk.red('[✖ Conexión cerrada] Reason:'), chalk.yellow(reason));
+        }
+    });
+
+    // ------------------- MENSAJES ENTRANTES -------------------
+    chappie.ev.on('messages.upsert', async ({ messages }) => {
         const msg = messages[0];
         if (!msg.message) return;
 
-        const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
-        if (!text) return;
+        const from = msg.key.remoteJid;
+        const content = msg.message.conversation || msg.message.extendedTextMessage?.text || 'Media/otro tipo de mensaje';
 
-        if (text.startsWith('.ping')) {
-            await chappie.sendMessage(msg.key.remoteJid, { text: 'Pong!' });
+        // Mensaje recibido
+        console.log(chalk.yellow('[📥 Mensaje]'), chalk.magenta(from), ':', chalk.white(content));
+
+        // Comando
+        if (content.startsWith('.')) {
+            console.log(chalk.green('[⚡ Comando]'), chalk.blue(content));
+
+            // Ejemplo simple de comando
+            if (content === '.ping') {
+                await chappie.sendMessage(from, { text: 'Pong!' });
+                console.log(chalk.green('[✔ Comando ejecutado]'), chalk.blue(content));
+            }
         }
     });
 
     return chappie;
-}
+};
+
+export { startChappie };
